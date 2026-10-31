@@ -1,0 +1,159 @@
+rules_version = '2';
+// BlashBerry security rules — generated from perms.js (do not edit by hand; re-generate instead).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    // The shop owner is the uid stored in shops/{shop}/meta/owner (claimed once, first come first served).
+    function isOwner(shop) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/shops/$(shop)/meta/owner)
+        && get(/databases/$(database)/documents/shops/$(shop)/meta/owner).data.uid == request.auth.uid;
+    }
+    function me(shop) {
+      return get(/databases/$(database)/documents/shops/$(shop)/staff/$(request.auth.uid)).data;
+    }
+    function isStaff(shop) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/shops/$(shop)/staff/$(request.auth.uid))
+        && me(shop).active == true;
+    }
+    function can(shop, perm) {
+      return isOwner(shop) || (isStaff(shop) && me(shop).perms.get(perm, false) == true);
+    }
+    // soft-delete (_d: true) needs the 'delete' permission; hard deletes are never allowed
+    function delOk(shop) {
+      return request.resource.data.get('_d', false) != true || can(shop, 'delete');
+    }
+
+    match /shops/{shop} {
+
+      match /meta/owner {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && !exists(/databases/$(database)/documents/shops/$(shop)/meta/owner);
+      }
+
+      match /staff/{uid} {
+        allow read: if signedIn() && (uid == request.auth.uid || isOwner(shop));
+        allow create: if isOwner(shop)
+          || (signedIn() && uid == request.auth.uid
+              && request.resource.data.role == 'owner'
+              && !exists(/databases/$(database)/documents/shops/$(shop)/meta/owner)
+              && existsAfter(/databases/$(database)/documents/shops/$(shop)/meta/owner)
+              && getAfter(/databases/$(database)/documents/shops/$(shop)/meta/owner).data.uid == request.auth.uid);
+        allow update, delete: if isOwner(shop);
+      }
+
+      match /logs/{id} {
+        allow read: if isOwner(shop);
+        allow create: if isStaff(shop) && request.resource.data.uid == request.auth.uid;
+      }
+
+      match /products/{id} {
+        allow read: if can(shop, 'products_view') || can(shop, 'products_edit') || can(shop, 'orders_edit') || can(shop, 'orders_status') || can(shop, 'sales_edit') || can(shop, 'damages_edit') || can(shop, 'purchases_edit');
+        allow create, update: if (can(shop, 'products_edit')) && delOk(shop);
+      }
+
+      match /combos/{id} {
+        allow read: if can(shop, 'products_view') || can(shop, 'products_edit') || can(shop, 'orders_edit') || can(shop, 'orders_status') || can(shop, 'sales_edit') || can(shop, 'damages_edit') || can(shop, 'purchases_edit');
+        allow create, update: if (can(shop, 'products_edit')) && delOk(shop);
+      }
+
+      match /productCosts/{id} {
+        allow read: if can(shop, 'costs_view');
+        allow create, update: if (can(shop, 'costs_edit')) && delOk(shop);
+      }
+
+      match /comboCosts/{id} {
+        allow read: if can(shop, 'costs_view');
+        allow create, update: if (can(shop, 'costs_edit')) && delOk(shop);
+      }
+
+      match /orders/{id} {
+        allow read: if can(shop, 'orders_view') || can(shop, 'products_view');
+        allow create: if (can(shop, 'orders_edit')) && delOk(shop);
+        // 'status only' staff may change just these fields on an existing order
+        allow update: if ((can(shop, 'orders_edit')) && delOk(shop))
+          || ((can(shop, 'orders_status')) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'printed', 'cstatus', '_u']));
+      }
+
+      match /sales/{id} {
+        allow read: if can(shop, 'sales_view') || can(shop, 'products_view');
+        allow create, update: if (can(shop, 'sales_edit')) && delOk(shop);
+      }
+
+      match /damages/{id} {
+        allow read: if can(shop, 'damages_view') || can(shop, 'products_view');
+        allow create, update: if (can(shop, 'damages_edit')) && delOk(shop);
+      }
+
+      match /purchases/{id} {
+        allow read: if can(shop, 'purchases_view') || can(shop, 'products_view');
+        allow create, update: if (can(shop, 'purchases_edit')) && delOk(shop);
+      }
+
+      match /purchaseFin/{id} {
+        allow read: if can(shop, 'purchases_view');
+        allow create, update: if (can(shop, 'purchases_edit')) && delOk(shop);
+      }
+
+      match /suppliers/{id} {
+        allow read: if can(shop, 'purchases_view');
+        allow create, update: if (can(shop, 'purchases_edit')) && delOk(shop);
+      }
+
+      match /supplierPayments/{id} {
+        allow read: if can(shop, 'purchases_view');
+        allow create, update: if (can(shop, 'purchases_edit')) && delOk(shop);
+      }
+
+      match /courierPayments/{id} {
+        allow read: if can(shop, 'cash_view');
+        allow create, update: if (can(shop, 'cash_edit')) && delOk(shop);
+      }
+
+      match /cash/{id} {
+        allow read: if can(shop, 'cash_view');
+        allow create, update: if (can(shop, 'cash_edit')) && delOk(shop);
+      }
+
+      match /finSettings/{id} {
+        allow read: if can(shop, 'cash_view');
+        allow create, update: if (can(shop, 'cash_edit')) && delOk(shop);
+      }
+
+      match /expenses/{id} {
+        allow read: if can(shop, 'expenses_view');
+        allow create, update: if (can(shop, 'expenses_edit')) && delOk(shop);
+      }
+
+      match /loansTaken/{id} {
+        allow read: if can(shop, 'loans_view');
+        allow create, update: if (can(shop, 'loans_edit')) && delOk(shop);
+      }
+
+      match /loanPayments/{id} {
+        allow read: if can(shop, 'loans_view');
+        allow create, update: if (can(shop, 'loans_edit')) && delOk(shop);
+      }
+
+      match /loansGiven/{id} {
+        allow read: if can(shop, 'loans_view');
+        allow create, update: if (can(shop, 'loans_edit')) && delOk(shop);
+      }
+
+      match /loanCollections/{id} {
+        allow read: if can(shop, 'loans_view');
+        allow create, update: if (can(shop, 'loans_edit')) && delOk(shop);
+      }
+
+      match /settings/{id} {
+        allow read: if isStaff(shop);
+        allow create, update: if isOwner(shop);
+      }
+    }
+  }
+}
