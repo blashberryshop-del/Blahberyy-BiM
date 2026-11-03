@@ -40,6 +40,7 @@
     expenses: { r: ['expenses_view'], w: ['expenses_edit'] },
     loansTaken: { r: ['loans_view'], w: ['loans_edit'] }, loanPayments: { r: ['loans_view'], w: ['loans_edit'] },
     loansGiven: { r: ['loans_view'], w: ['loans_edit'] }, loanCollections: { r: ['loans_view'], w: ['loans_edit'] },
+    chat: { r: ['orders_view'], w: ['orders_view'], own: true },   // team chat: anyone who can see orders; edit/soft-delete only your own messages (owner: any)
     settings: { r: ['*'], w: [] } // any active staff reads; only the owner writes
   };
   const COLLS = Object.keys(ACCESS);
@@ -48,7 +49,7 @@
   const canRead = (prof, c) => { const a = ACCESS[c]; return !!prof && (prof.role === 'owner' || a.r.includes('*') || a.r.some(p => has(prof, p))); };
   const canWrite = (prof, c) => { const a = ACCESS[c]; return !!prof && (prof.role === 'owner' || a.w.some(p => has(prof, p)) || (a.status || []).some(p => has(prof, p))); };
   // fields a 'status only' writer may change on an order (must match the generated rule)
-  const STATUS_FIELDS = ['status', 'printed', 'cstatus', '_u'];
+  const STATUS_FIELDS = ['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', '_u'];
   const fix = perms => { const o = Object.assign({}, perms); let ch = true; while (ch) { ch = false; Object.keys(IMPLIES).forEach(k => { if (o[k] && !o[IMPLIES[k]]) { o[IMPLIES[k]] = true; ch = true; } }); } return o; };
 
   /* ---------- Firestore security rules generated from ACCESS ---------- */
@@ -57,6 +58,7 @@
     const blocks = COLLS.map(c => {
       const a = ACCESS[c];
       if (a.r.includes('*')) return `      match /${c}/{id} {\n        allow read: if isStaff(shop);\n        allow create, update: if isOwner(shop);\n      }`;
+      if (a.own) return `      match /${c}/{id} {\n        allow read: if ${any(a.r)};\n        // you may only post as yourself, and only edit or soft-delete your own messages (the owner may moderate)\n        allow create: if (${any(a.w)}) && request.resource.data.uid == request.auth.uid;\n        allow update: if (${any(a.w)}) && (resource.data.uid == request.auth.uid || isOwner(shop)) && request.resource.data.uid == resource.data.uid;\n      }`;
       if (a.status) return `      match /${c}/{id} {\n        allow read: if ${any(a.r)};\n        allow create: if (${any(a.w)}) && delOk(shop);\n        // 'status only' staff may change just these fields on an existing order\n        allow update: if ((${any(a.w)}) && delOk(shop))\n          || ((${any(a.status)}) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([${STATUS_FIELDS.map(f => "'" + f + "'").join(', ')}]));\n      }`;
       return `      match /${c}/{id} {\n        allow read: if ${any(a.r)};\n        allow create, update: if (${any(a.w)}) && delOk(shop);\n      }`;
     }).join('\n\n');

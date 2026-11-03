@@ -34,7 +34,7 @@ const IC = {
   bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/>', check: '<path d="M4 12l5 5L20 6"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
   scan: '<path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3"/><path d="M7 12h10"/>', image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 17l-5-5-9 8"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>', lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
-  up: '<path d="M6 15l6-6 6 6"/>', down: '<path d="M6 9l6 6 6-6"/>', back: '<path d="M15 5l-7 7 7 7"/>', cloud: '<path d="M7 18a4 4 0 0 1-.5-7.97A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/>'
+  up: '<path d="M6 15l6-6 6 6"/>', down: '<path d="M6 9l6 6 6-6"/>', back: '<path d="M15 5l-7 7 7 7"/>', cloud: '<path d="M7 18a4 4 0 0 1-.5-7.97A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/>', chat: '<path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M8 9h8M8 12h5"/>'
 };
 const ico = (k, s = 22) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${IC[k] || ''}</svg>`;
 
@@ -119,7 +119,7 @@ function mergeRemote(coll, snapx) {
   if (ch) { S._v = 1; mig = migrate(S); }   // older cloud copies had cost fields inline: split them out
   Object.values(S[coll]).forEach(l => { if (seen[l.id] == null || seen[l.id] < l._u) push(coll, l); });
   if (mig) { const t = Date.now() - 5000; ['products', 'combos', 'purchases', 'settings', 'productCosts', 'comboCosts', 'purchaseFin', 'finSettings'].forEach(c => { if (c !== coll) Object.values(S[c]).forEach(r => { if (r._u > t) push(c, r); }); }); }
-  if (ch) { persist(); render(); }
+  if (ch) { persist(); if (coll === 'chat') chatRefresh(); else render(); }
 }
 function subscribeAll() {
   SY.unsub.forEach(f => f()); SY.unsub = []; const db = SY.db, base = `shops/${SY.shop}`;
@@ -215,6 +215,24 @@ function linesEditor(items, mode = 'sell', showRet = true) {
 }
 function readLines(el) {
   return [...el.querySelectorAll('.ln')].map(r => ({ code: r.querySelector('.c').value.trim(), qty: n(r.querySelector('.q').value), price: r.querySelector('.p') ? n(r.querySelector('.p').value) : 0, ret: r.querySelector('.r') ? n(r.querySelector('.r').value) : 0 })).filter(i => i.code && i.qty);
+}
+/* ---------- confirmation-call workflow (order.call*, order.cancelType) ---------- */
+const CALLS = { ok: ['✅', 'কনফার্ম'], noans: ['📵', 'ধরেনি'], off: ['🔌', 'ফোন বন্ধ'], later: ['🕒', 'পরে জানাবে'], sched: ['📅', 'শিডিউল'], cancel: ['❌', 'ক্যানসেল চায়'] };
+const CANCELT = { call: 'কলে ক্যানসেল', courier: 'কুরিয়ার থেকে ক্যানসেল' };
+const CANCEL_ST = ['Cancelled', 'Return Pending', 'Returned'];
+const callDue = o => (o.call === 'sched' || o.call === 'later') && o.callDate && o.callDate <= today() && o.status === 'Pending';
+function callTag(o) {
+  let h = '';
+  if (o.status === 'Pending' && !o.call) h += '<span class="tag warn">📞 কল বাকি</span>';
+  else if (o.call && CALLS[o.call]) h += `<span class="tag${callDue(o) ? ' warn' : ''}">${CALLS[o.call][0]} ${CALLS[o.call][1]}${o.callDate ? ' · ' + fmtD(o.callDate) : ''}${callDue(o) ? ' (আজ/আগে)' : ''}</span>`;
+  if (o.cancelType && CANCEL_ST.includes(o.status)) h += `<span class="tag">${CANCELT[o.cancelType] || ''}</span>`;
+  return h;
+}
+const callMatch = (o, f) => !f || (f === 'todo' ? o.status === 'Pending' && !o.call : f === 'ct_call' || f === 'ct_courier' ? o.cancelType === f.slice(3) && CANCEL_ST.includes(o.status) : o.call === f && (f === 'ok' || o.status === 'Pending'));
+function callLine(o) {
+  if (!o.call || !CALLS[o.call]) return '';
+  const ago = o.callAt ? new Date(o.callAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  return `${CALLS[o.call][0]} ${CALLS[o.call][1]}${o.callDate ? ' · ' + fmtD(o.callDate) : ''}${o.callBy ? ' · ' + esc(o.callBy) : ''}${ago ? ' · ' + ago : ''}${o.callNote ? ' — ' + esc(o.callNote) : ''}`;
 }
 const badge = s => `<span class="bd ${BADGE[s] || 'b-gray'}">${STBN[s] || s}</span>`;
 const fmtD = d => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';

@@ -22,14 +22,42 @@ const A = {
   /* ---------- orders ---------- */
   status(id, st, quiet) {
     const o = S.orders[id]; if (!o || o.status === st) return; if (!can('orders_status')) return toast('স্ট্যাটাস বদলের অনুমতি নেই');
-    const prev = o.status; o.status = st; save('orders', o, quiet, `অর্ডার #${o.no} → ${st}`);
-    toast(`#${o.no} → ${STBN[st]}`, () => { o.status = prev; save('orders', o, false, `অর্ডার #${o.no} → ${prev} (Undo)`); });
+    const prev = o.status, prevCT = o.cancelType; o.status = st;
+    if (st === 'Cancelled' && !o.cancelType) o.cancelType = (o.tracking || o.cid) ? 'courier' : 'call';   // cancelled after it went to the courier vs at the confirmation call
+    save('orders', o, quiet, `অর্ডার #${o.no} → ${st}`);
+    toast(`#${o.no} → ${STBN[st]}`, () => { o.status = prev; o.cancelType = prevCT || ''; save('orders', o, false, `অর্ডার #${o.no} → ${prev} (Undo)`); });
+  },
+  /* ---------- confirmation call result ---------- */
+  call(id, k) {
+    const o = S.orders[id]; if (!o) return; if (!can('orders_status')) return toast('কল-অবস্থা বদলের অনুমতি নেই');
+    if (k === 'sched' || k === 'later') return A.callSheet(id, k);
+    if (k === 'cancel' && !confirm(`#${o.no} ${o.customer || ''} — কাস্টমার ক্যানসেল চেয়েছে?\nঅর্ডার ক্যানসেল হয়ে যাবে (স্টক ফিরে আসবে)।`)) return;
+    A.callSet(id, k, {});
+  },
+  callSet(id, k, extra) {
+    const o = S.orders[id]; if (!o) return;
+    const prev = { call: o.call, callDate: o.callDate, callNote: o.callNote, callAt: o.callAt, callBy: o.callBy, status: o.status, cancelType: o.cancelType };
+    Object.assign(o, { call: k, callDate: '', callNote: '', callAt: Date.now(), callBy: (profile && profile.name) || '' }, extra || {});
+    if (k === 'ok' && o.status === 'Pending') o.status = 'Confirmed';
+    if (k === 'cancel') { o.status = 'Cancelled'; o.cancelType = 'call'; }
+    save('orders', o, false, `অর্ডার #${o.no} কল: ${CALLS[k][1]}`);
+    toast(`#${o.no} ${CALLS[k][0]} ${CALLS[k][1]}${o.status !== prev.status ? ' → ' + STBN[o.status] : ''}`, () => { Object.assign(o, prev); save('orders', o, false, `অর্ডার #${o.no} কল Undo`); });
+  },
+  callSheet(id, k) {
+    const o = S.orders[id]; if (!o) return;
+    const tm = shiftD(today(), 1);
+    sheet(`${CALLS[k][0]} ${CALLS[k][1]} — #${o.no} ${o.customer || ''}`,
+      `<p class="note">${k === 'sched' ? 'কাস্টমার যেদিন নিতে বলেছে সেই তারিখ দিন। ওইদিন অর্ডার তালিকায় লাল চিহ্নে উঠবে।' : 'কবে আবার কল করবেন তার তারিখ দিন।'}</p>` +
+      fld('callDate', k === 'sched' ? 'শিডিউল তারিখ' : 'আবার কল করার তারিখ', 'date', o.callDate || tm) + fld('callNote', 'নোট (যেমন "রাতে কল দিতে বলেছে")', 'text', o.callNote || ''),
+      d => { const v = vals(d); if (!v.callDate) { toast('তারিখ দিন'); return false; } A.callSet(id, k, { callDate: v.callDate, callNote: v.callNote || '' }); }, 'সেভ');
   },
   order(id, pre) {
     const o = id ? S.orders[id] : Object.assign({ date: today(), status: 'Pending', pay: 'Cash on Delivery', items: [] }, pre || {});
     const ed = can('orders_edit'), dis = ed ? '' : 'disabled', cs = ['', ...cfg().couriers];
     if (!id && !ed) return toast('অর্ডার যোগের অনুমতি নেই');
     const body = (id && can('orders_status') ? `<div class="chips">${ST.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="A.status('${id}','${s}');closeSheet()">${STBN[s]}</button>`).join('')}</div>` : '') +
+      (id && can('orders_status') ? `<div class="lbl">📞 কনফার্মেশন কলের ফলাফল</div><div class="chips">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" onclick="closeSheet();A.call('${id}','${k}')">${CALLS[k][0]} ${CALLS[k][1]}</button>`).join('')}</div>${o.call ? `<div class="os">${callLine(o)}</div>` : ''}` : '') +
+      (id ? `<div class="btnrow" style="margin:4px 0 8px"><button class="btn ghost sm" onclick="A.forward('${id}')">${ico('up', 14)} টিম গ্রুপে পাঠান</button><button class="btn ghost sm" onclick="A.thread('${id}')">💬 এই অর্ডার নিয়ে আলোচনা${typeof chatCount === 'function' && chatCount(id) ? ' (' + chatCount(id) + ')' : ''}</button></div>` : '') +
       fld('date', 'তারিখ', 'date', o.date, 0, dis) + fld('customer', 'কাস্টমার', 'text', o.customer, 0, dis) + fld('phone', 'ফোন', 'tel', o.phone, 0, dis) + fld('address', 'ঠিকানা', 'textarea', o.address, 0, dis) +
       `<div class="row2">${fld('source', 'সোর্স (FB/TikTok…)', 'text', o.source, 0, `list="srcs" ${dis}`)}${fld('area', 'জেলা/এলাকা (খালি = ঠিকানা থেকে)', 'text', o.area, 0, dis)}</div><datalist id="srcs">${SOURCES.map(s => `<option value="${s}">`).join('')}</datalist>` +
       fld('note', 'নোট', 'text', o.note, 0, dis) + (ed ? linesEditor(o.items, 'sell', true) : `<div class="lbl">আইটেম</div><div class="os">${(o.items || []).map(i => esc(i.code) + '×' + i.qty).join(', ') || '—'}</div>`) +
@@ -37,6 +65,7 @@ const A = {
       fld('bill', 'বিল (আইটেম না দিলে এই টাকাই ধরা হবে)', 'number', o.bill, 0, dis) +
       `<div class="row2">${fld('advance', 'অগ্রিম পেমেন্ট', 'number', o.advance, 0, dis)}${fld('pay', 'পেমেন্ট', 'select', o.pay, PAY_O, dis)}</div>` +
       fld('status', 'স্ট্যাটাস', 'select', o.status, ST.map(s => [s, STBN[s]]), dis) +
+      (CANCEL_ST.includes(o.status) ? fld('cancelType', 'ক্যানসেল কীভাবে হলো', 'select', o.cancelType || '', [['', '—'], ['call', 'কনফার্মেশন কলে ক্যানসেল'], ['courier', 'কুরিয়ারে থাকা অবস্থায় ক্যানসেল']], dis) : '') +
       `<div class="row2">${fld('courier', 'কুরিয়ার', 'select', o.courier || '', cs, dis)}${fld('tracking', 'কনসাইনমেন্ট নং', 'text', o.tracking, 0, dis)}</div>` +
       (can('costs_view') ? fld('charge', '🔒 কুরিয়ার চার্জ (আমাকে যা নেয়)', 'number', o.charge, 0, dis) + fld('retCharge', '🔒 রিটার্নে কাস্টমারের দেওয়া ডেলিভারি চার্জ (আমার আয়)', 'number', o.retCharge, 0, dis) : '') +
       (id && R.O[id] && canProfit() && R.O[id].rev ? `<div class="panel"><div class="pr"><span>অর্ডার প্রফিট (প্রোডাক্ট: বিক্রি − কেনা দাম)</span><b>${money(R.O[id].profit)}</b></div>${R.O[id].codFee ? `<div class="pr"><span>COD চার্জ (কুরিয়ার কাটবে)</span><b>${money(R.O[id].codFee)}</b></div>` : ''}</div>` : '') +
@@ -44,7 +73,7 @@ const A = {
     sheet(id ? `অর্ডার #${o.no}` : 'নতুন অর্ডার', body, ed ? d => {
       const v = vals(d); if (!v.customer && !v.phone) { toast('নাম বা ফোন দিন'); return false; }
       if (!id && v.phone && live(S, 'orders').some(x => x.phone === v.phone && x.date === v.date && x.status !== 'Cancelled') && !confirm(`এই নম্বরে (${v.phone}) একই তারিখে আগেই অর্ডার আছে।\nতবুও সেভ করবেন?`)) return false;
-      v.source = normSource(v.source); Object.assign(o, v, { items: readLines(d), no: o.no || nextNo() }); save('orders', o);
+      v.source = normSource(v.source); if (v.status === 'Cancelled' && !v.cancelType && !o.cancelType) v.cancelType = (v.tracking || o.tracking) ? 'courier' : 'call'; Object.assign(o, v, { items: readLines(d), no: o.no || nextNo() }); save('orders', o);
     } : null);
   },
   quick(text) {

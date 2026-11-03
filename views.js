@@ -64,15 +64,16 @@ function vHome() {
 const NEXT = { Pending: ['Confirmed', 'কনফার্ম'], Confirmed: ['Shipped', 'শিপড'], Shipped: ['Delivered', 'ডেলিভারড'] };
 function orderRows() {
   const q = (view.oq || '').toLowerCase(), f = view.of || 'all', inr = inR(view.orange || 'all');
-  return R.onl.filter(({ o }) => (f === 'all' || o.status === f) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
-    (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => n(b.o.no) - n(a.o.no));
+  return R.onl.filter(({ o }) => (f === 'all' || o.status === f) && callMatch(o, view.ocall) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
+    (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => (view.ocall === 'sched' || view.ocall === 'later') ? String(a.o.callDate || '').localeCompare(String(b.o.callDate || '')) || n(a.o.no) - n(b.o.no) : n(b.o.no) - n(a.o.no));
 }
 function orderCard({ o, r }) {
   const sm = !!view.sel, on = sm && view.sel[o.id], nx = NEXT[o.status], dist = dKey(o), src = normSource(o.source);
   return `<div class="oc ${on ? 'selc' : ''}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div>` +
-    `<div class="os">${esc(o.phone || '')} · ${fmtD(o.date)}</div><div class="os">${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}</div>` +
+    `<div class="os">${esc(o.phone || '')} · ${fmtD(o.date)}</div><div class="os">${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` +
     `<div class="oh"><span><b>${money(r.total)}</b>${r.noItems ? ' <small class="warn">⚠ আইটেম নেই</small>' : ''}</span><span class="${r.cod || r.due > 0 ? 'rd' : 'gr'}">${r.cod ? 'COD ' + money(r.cod) : r.due > 0 ? 'বাকি ' + money(r.due) : r.paid >= r.total && r.total ? '✓ পেইড' : ''}</span></div>` +
-    (!sm && ((nx && can('orders_status')) || can('orders_view')) ? `<div class="oact">${canBook(o) ? `<button class="btn sm" onclick="event.stopPropagation();A.sfBook('${o.id}')">${ico('truck', 14)} Steadfast বুক</button>` : ''}${nx && can('orders_status') ? `<button class="btn sm" onclick="event.stopPropagation();A.status('${o.id}','${nx[0]}')">${ico('check', 14)} ${nx[1]}</button>` : ''}<button class="btn sm ghost" onclick="event.stopPropagation();A.labelSheet(['${o.id}'])">${ico('printer', 14)} লেবেল</button></div>` : '') + `</div>`;
+    (!sm && ((nx && can('orders_status')) || can('orders_view')) ? `<div class="oact">${canBook(o) ? `<button class="btn sm" onclick="event.stopPropagation();A.sfBook('${o.id}')">${ico('truck', 14)} Steadfast বুক</button>` : ''}${nx && can('orders_status') ? `<button class="btn sm" onclick="event.stopPropagation();A.status('${o.id}','${nx[0]}')">${ico('check', 14)} ${nx[1]}</button>` : ''}<button class="btn sm ghost" onclick="event.stopPropagation();A.labelSheet(['${o.id}'])">${ico('printer', 14)} লেবেল</button></div>` : '') +
+    (!sm && o.status === 'Pending' && can('orders_status') ? `<div class="ccall">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" title="${CALLS[k][1]}" onclick="event.stopPropagation();A.call('${o.id}','${k}')">${CALLS[k][0]}${o.call === k ? '' : ' <small>' + CALLS[k][1] + '</small>'}</button>`).join('')}</div>` : '') + `</div>`;
 }
 function orderListHtml() {
   const L = orderRows(), tot = L.length, show = L.slice(0, view.omax || 60); view.visible = show.map(x => x.o.id);
@@ -85,6 +86,7 @@ function vOrders() {
     head('অনলাইন অর্ডার', `${can('orders_view') ? `<button class="btn sm ghost" onclick="A.selMode()">${ico('check', 14)} সিলেক্ট</button>` : ''}${can('orders_edit') ? `<button class="btn sm" onclick="A.quick()">${ico('bolt', 14)} কুইক</button>` : ''}`) +
     `<input class="search" placeholder="নাম / ফোন / অর্ডার নং / কনসাইনমেন্ট / সোর্স" value="${esc(view.oq || '')}" oninput="view.oq=this.value;A.olist()">` +
     `<div class="chips sc"><button class="chip ${f === 'all' ? 'on' : ''}" onclick="A.f('of','all')">সব</button>${ST.map(s => `<button class="chip ${f === s ? 'on' : ''}" onclick="A.f('of','${s}')">${STBN[s]} <small>${R.onl.filter(x => x.o.status === s).length}</small></button>`).join('')}</div>` +
+    `<div class="chips sc"><span class="muted" style="align-self:center">কল:</span>${[['', 'সব'], ['todo', '📞 কল বাকি'], ...Object.keys(CALLS).map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল']].map(([k, l]) => { const c = k ? R.onl.filter(x => callMatch(x.o, k)).length : 0; return `<button class="chip ${(view.ocall || '') === k ? 'on' : ''}" onclick="A.f('ocall','${k}')">${l}${k ? ` <small>${c}</small>` : ''}</button>`; }).join('')}</div>` +
     (fl.length ? `<div class="chips">${fl.map(([k, l]) => `<button class="chip on" onclick="view.${k}=null;render()">${esc(l)} ✕</button>`).join('')}</div>` : '') + `<div id="olist">${orderListHtml()}</div>`;
 }
 
@@ -186,7 +188,7 @@ function vReports() {
 
 /* ---------- more menu, staff, logs, login ---------- */
 function vMore() {
-  const items = [['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_view'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
+  const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_view'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
   const who = profile ? `${esc(profile.name || '')} · ${profile.local ? 'লোকাল মোড' : profile.role === 'owner' ? 'Owner' : 'স্টাফ'}` : '';
   return head('আরও', '') + `<div class="grid">${items.map(([k, i, l]) => `<button class="gi" onclick="A.nav('${k}')"><span>${ico(i, 24)}</span>${l}</button>`).join('')}</div>` +
     (isOwner() ? `<button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="A.labelSheet([],1)">${ico('printer', 18)} লেবেল ডিজাইন</button>` : '') + `<button class="btn ghost" style="width:100%" onclick="A.settings()">${ico('gear', 18)} সেটিংস, থিম ও ব্যাকআপ</button><p class="note" style="text-align:center">${who}</p>`;
@@ -223,8 +225,8 @@ Object.assign(A, {
 });
 
 /* ---------- router ---------- */
-const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs };
-const NEED = { orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_view', staff: '#owner', logs: '#owner' };
+const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, chat: vChat };
+const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_view', staff: '#owner', logs: '#owner' };
 const allowed = v => !NEED[v] || (NEED[v] === '#owner' ? isOwner() : can(NEED[v]));
 let lastView = '';
 function render() {
@@ -239,7 +241,8 @@ function render() {
   const act = tabs.some(t => t[0] === v) ? v : 'more';
   nav.classList.remove('hide'); nav.innerHTML = tabs.map(([k, i, l]) => `<button class="${k === act ? 'on' : ''}" onclick="A.nav('${k}')"><span class="pill">${ico(i, 21)}</span>${l}</button>`).join('');
   const canAdd = ['orders_edit', 'sales_edit', 'purchases_edit', 'expenses_edit', 'damages_edit', 'cash_edit'].some(can) || can('orders_view');
-  fab.classList.toggle('hide', !canAdd); fab.innerHTML = ico('plus', 28);
+  fab.classList.toggle('hide', !canAdd || v === 'chat'); fab.innerHTML = ico('plus', 28);
+  chatBadge(); if (v === 'chat') { chatMarkSeen(); chatBadge(); const m = $('#main'); m.scrollTop = m.scrollHeight; }
   el.scrollTop = lastView === v ? st : 0; lastView = v; setSync(SY.st);
 }
 window.render = render;

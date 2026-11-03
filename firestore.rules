@@ -77,7 +77,7 @@ service cloud.firestore {
         allow create: if (can(shop, 'orders_edit')) && delOk(shop);
         // 'status only' staff may change just these fields on an existing order
         allow update: if ((can(shop, 'orders_edit')) && delOk(shop))
-          || ((can(shop, 'orders_status')) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'printed', 'cstatus', '_u']));
+          || ((can(shop, 'orders_status')) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', '_u']));
       }
 
       match /sales/{id} {
@@ -148,6 +148,13 @@ service cloud.firestore {
       match /loanCollections/{id} {
         allow read: if can(shop, 'loans_view');
         allow create, update: if (can(shop, 'loans_edit')) && delOk(shop);
+      }
+
+      match /chat/{id} {
+        allow read: if can(shop, 'orders_view');
+        // you may only post as yourself, and only edit or soft-delete your own messages (the owner may moderate)
+        allow create: if (can(shop, 'orders_view')) && request.resource.data.uid == request.auth.uid;
+        allow update: if (can(shop, 'orders_view')) && (resource.data.uid == request.auth.uid || isOwner(shop)) && request.resource.data.uid == resource.data.uid;
       }
 
       match /settings/{id} {
