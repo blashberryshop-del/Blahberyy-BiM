@@ -154,7 +154,11 @@ service cloud.firestore {
         allow read: if can(shop, 'orders_view');
         // you may only post as yourself, and only edit or soft-delete your own messages (the owner may moderate)
         allow create: if (can(shop, 'orders_view')) && request.resource.data.uid == request.auth.uid;
-        allow update: if (can(shop, 'orders_view')) && (resource.data.uid == request.auth.uid || isOwner(shop)) && request.resource.data.uid == resource.data.uid;
+        allow update: if (can(shop, 'orders_view')) && request.resource.data.uid == resource.data.uid
+          && ((resource.data.uid == request.auth.uid || isOwner(shop))
+              // anyone may add/change/remove only THEIR OWN reaction (react.<their uid>)
+              || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react', '_u'])
+                  && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])));
       }
 
       match /settings/{id} {

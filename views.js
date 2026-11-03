@@ -242,7 +242,7 @@ function render() {
   nav.classList.remove('hide'); nav.innerHTML = tabs.map(([k, i, l]) => `<button class="${k === act ? 'on' : ''}" onclick="A.nav('${k}')"><span class="pill">${ico(i, 21)}</span>${l}</button>`).join('');
   const canAdd = ['orders_edit', 'sales_edit', 'purchases_edit', 'expenses_edit', 'damages_edit', 'cash_edit'].some(can) || can('orders_view');
   fab.classList.toggle('hide', !canAdd || v === 'chat'); fab.innerHTML = ico('plus', 28);
-  chatBadge(); if (v === 'chat') { chatMarkSeen(); chatBadge(); const m = $('#main'); m.scrollTop = m.scrollHeight; }
+  chatBadge(); if (v === 'chat') { markSeen(curRoom()); chatBadge(); const m = $('#main'); m.scrollTop = m.scrollHeight; }
   el.scrollTop = lastView === v ? st : 0; lastView = v; setSync(SY.st);
 }
 window.render = render;
