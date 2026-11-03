@@ -97,6 +97,12 @@ const A = {
       render(); toast(`✓ ${ok} টা আপডেট${miss.length ? ' · পাওয়া যায়নি: ' + miss.join(', ') : ''}`); if (miss.length) alert('এই কনসাইনমেন্ট খুঁজে পাইনি:\n' + miss.join('\n'));
     }, 'আপডেট করুন');
   },
+  payHist(c) {
+    const rows = live(S, 'courierPayments').filter(p => p.courier === c).sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')) || (y.t || 0) - (x.t || 0));
+    const body = rows.length ? rows.map(p => `<div class="panel"><div class="oh"><b>${money(n(p.amount))}</b><span class="os">${esc(p.date || '')}</span></div><div class="os">${n(p.fee) ? 'ফি ' + money(n(p.fee)) + ' · ' : ''}${n(p.deduct) ? 'অন্য কাটা ' + money(n(p.deduct)) + ' · ' : ''}${esc(p.note || '')}</div>${can('delete') ? `<button class="btn sm ghost" onclick="A.delPay('${p.id}','${esc(c)}')">ডিলিট</button>` : ''}</div>`).join('') : '<p class="muted">কোনো পেমেন্ট এন্ট্রি নেই</p>';
+    sheet(c + ' — পেমেন্ট ইতিহাস', body);
+  },
+  delPay(id, c) { if (!confirm('এই পেমেন্ট এন্ট্রি ডিলিট করবেন? পাওনার হিসাব বদলে যাবে।')) return; remove('courierPayments', id); A.payHist(c); },
   payCourier(c) {
     const cs = snap(R).couriers[c], due = cs ? Math.max(cs.codDue, 0) : 0;
     sheet(c + ' থেকে টাকা পেলাম', `<p>প্রত্যাশিত সেটেলমেন্ট (ডেলিভারড COD − কুরিয়ার চার্জ − COD চার্জ + রিটার্ন চার্জ): <b>${money(cs ? cs.settle : 0)}</b><br>এখনো পাওনা: <b>${money(cs ? cs.codDue : 0)}</b></p>` + fld('date', 'তারিখ', 'date', today()) + fld('amount', 'ব্যাংক/ওয়ালেটে কত এলো', 'number', due || '') +
