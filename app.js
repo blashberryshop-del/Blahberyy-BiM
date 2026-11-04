@@ -22,6 +22,7 @@ const STBN = { Pending: 'পেন্ডিং', Confirmed: 'কনফার্�
 
 /* ---------- icons ---------- */
 const IC = {
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>', copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
   home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>', box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v9"/>',
   truck: '<path d="M1 6h13v10H1z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>', chart: '<path d="M5 20V10M12 20V4M19 20v-8"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -117,9 +118,17 @@ function mergeRemote(coll, snapx) {
   let ch = false, mig = false; const seen = {};
   snapx.forEach(d => { const r = d.data(); seen[r.id] = r._u; const l = S[coll][r.id]; if (!l || l._u < r._u) { S[coll][r.id] = r; ch = true; } });
   if (ch) { S._v = 1; mig = migrate(S); }   // older cloud copies had cost fields inline: split them out
-  Object.values(S[coll]).forEach(l => { if (seen[l.id] == null || seen[l.id] < l._u) push(coll, l); });
+  if (coll === 'chat') { if (typeof chatCleanup === 'function') setTimeout(() => chatCleanup(), 1500); const cut = chatCutoff(); Object.values(S.chat).forEach(l => { if ((l.t || 0) < cut) { delete S.chat[l.id]; ch = true; } }); }   // expired chat is gone for good: never push it back
+  const emptyCache = snapx.metadata && snapx.metadata.fromCache && snapx.size === 0;   // an empty cache-only snapshot must never make us 'restore' every local record
+  if (!emptyCache) Object.values(S[coll]).forEach(l => { if (seen[l.id] == null || seen[l.id] < l._u) push(coll, l); });
   if (mig) { const t = Date.now() - 5000; ['products', 'combos', 'purchases', 'settings', 'productCosts', 'comboCosts', 'purchaseFin', 'finSettings'].forEach(c => { if (c !== coll) Object.values(S[c]).forEach(r => { if (r._u > t) push(c, r); }); }); }
   if (ch) { persist(); if (coll === 'chat') chatRefresh(); else render(); }
+}
+let FSP = false;   // offline cache (IndexedDB) so a normal launch only reads what changed; multi-tab keeps two open tabs in sync
+function fsDb() {
+  const db = firebase.firestore();
+  if (!FSP) { FSP = true; try { db.enablePersistence({ synchronizeTabs: true }).catch(e => console.warn('offline cache off:', e && e.code)); } catch (e) { console.warn('offline cache off', e); } }
+  return db;
 }
 function subscribeAll() {
   SY.unsub.forEach(f => f()); SY.unsub = []; const db = SY.db, base = `shops/${SY.shop}`;
@@ -149,7 +158,7 @@ async function syncStart() {
       await signIn(auth, c); u = auth.currentUser;
     }
     if (c.pass || c.create) { const nc = Object.assign({}, c); delete nc.pass; delete nc.create; localStorage.bb_fb = JSON.stringify(nc); }   // never keep the password on the device
-    SY.uid = u.uid; SY.shop = c.shop; SY.db = firebase.firestore(); SY.err = '';
+    SY.uid = u.uid; SY.shop = c.shop; SY.db = fsDb(); SY.err = '';
     await loadProfile(c); if (!profile) { SY.db = null; setSync('err', 'অ্যাক্সেস নেই'); render(); return; }
     subscribeAll(); setSync('on'); render();
   } catch (e) {

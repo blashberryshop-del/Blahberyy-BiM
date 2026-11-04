@@ -2,6 +2,8 @@
    Messages live in `chat` ({id,t,uid,name,text,room,orderId?,card?,snap?,reply?,fwd?,react?}). Only people who can see orders can read/write
    (enforced by the generated Firestore rules); edit/soft-delete only your own messages (owner: any); anyone may set THEIR OWN reaction. */
 const ROOMS = ['g1', 'g2'], REACTS = ['👍', '✅', '❤️', '😂', '🙏', '❗'];
+const chatDays = () => { const d = cfg() && cfg().chatDays; return Math.min(60, Math.max(3, Math.round(n(d)) || 10)); };
+const chatCutoff = () => Date.now() - chatDays() * 86400000;
 const roomName = r => { const L = (cfg() && cfg().rooms) || []; return (r === 'g2' ? L[1] || 'কনফার্মেশন' : L[0] || 'সাধারণ'); };
 const msgRoom = m => m.room === 'g2' ? 'g2' : 'g1';
 const chatOn = () => !!cloudCfg() && !!profile && !profile.local && can('orders_view');
@@ -27,7 +29,7 @@ function chatPost(extra) {
   const rec = Object.assign({ id: uid(), t: Date.now(), uid: SY.uid, name: (profile && profile.name) || '', text: '' }, extra);
   put('chat', rec); return rec;
 }
-const msgPreview = m => m.card ? `📦 অর্ডার #${(m.snap && m.snap.no) || ''} ${(m.snap && m.snap.customer) || ''}` : clip(m.text, 70);
+const msgPreview = m => m.thumb && !m.text ? '📷 ছবি' : m.card ? `📦 অর্ডার #${(m.snap && m.snap.no) || ''} ${(m.snap && m.snap.customer) || ''}` : clip(m.text, 70);
 function reactHtml(m) {
   const r = m.react || {}, by = {}; Object.keys(r).forEach(u => { if (r[u]) (by[r[u]] = by[r[u]] || []).push(u); });
   const k = Object.keys(by); if (!k.length) return '';
@@ -37,6 +39,7 @@ function chatBubble(m) {
   const mine = m.uid === SY.uid; let body = '';
   if (m.fwd) body += `<div class="fw">↪ ফরোয়ার্ড${m.fwd.name ? ': ' + esc(m.fwd.name) : ''}</div>`;
   if (m.reply) body += `<div class="rq" onclick="event.stopPropagation();A.jump('${m.reply.id}')"><b>${esc(m.reply.name || '')}</b> ${esc(m.reply.text || '')}</div>`;
+  if (m.thumb) body += `<img class="cimg" alt="ছবি" src="${m.thumb}" onclick="event.stopPropagation();A.viewImg('${m.id}')">`;
   if (m.card) {
     const x = S.orders[m.orderId], o = x && !x._d ? x : null, sn = m.snap || {}, r = o && R && R.O ? R.O[o.id] : null;
     body += `<div class="ocard" onclick="event.stopPropagation();A.order('${m.orderId}')"><div class="oh"><b>#${esc(o ? o.no : sn.no)} ${esc(o ? o.customer : sn.customer)}</b>${o ? badge(o.status) : ''}</div>` +
@@ -49,10 +52,21 @@ function chatBubble(m) {
 const replyBar = key => view[key] ? `<div class="rbar"><span>↩ <b>${esc(view[key].name || '')}</b> ${esc(view[key].text || '')}</span><button class="x" onclick="view.${key}=null;chatRefresh()">✕</button></div>` : '';
 const chatListHtml = () => { const L = chatGroup(curRoom()).slice(-150); return L.length ? L.map(chatBubble).join('') : '<p class="muted" style="text-align:center;margin:40px 0">এই গ্রুপে এখনো কোনো মেসেজ নেই। প্রথম মেসেজ পাঠান।</p>'; };
 const roomTabs = () => `<div class="chips">${ROOMS.map(r => { const u = roomUnread(r); return `<button class="chip ${curRoom() === r ? 'on' : ''}" onclick="A.room('${r}')">${esc(roomName(r))}${u ? ` <small>${u}</small>` : ''}</button>`; }).join('')}</div>`;
+const scrollEnd = () => { const el = $('#main'); if (!el) return; el.style.scrollBehavior = 'auto'; el.scrollTop = el.scrollHeight; requestAnimationFrame(() => { el.style.scrollBehavior = ''; }); };
 function vChat() {
   if (!cloudCfg()) return head('টিম চ্যাট', '') + `<div class="panel"><b>আগে ক্লাউড সিঙ্ক চালু করুন</b><p class="note">টিম চ্যাট সবার ফোনে পৌঁছাতে Firebase সিঙ্ক লাগে। সেটআপ গাইড দেখুন।</p></div>`;
-  return head('টিম চ্যাট', '') + `<div id="roomtabs">${roomTabs()}</div><div id="chatlist">${chatListHtml()}</div>` +
-    `<div class="chatbar"><div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div></div>`;
+  return head('টিম চ্যাট', '') + `<div id="roomtabs">${roomTabs()}</div><div id="chatlist">${chatListHtml()}</div>`;
+}
+// the typing box lives OUTSIDE the scrolling list (fixed just above the bottom menu), so it never moves and never covers a message
+function chatDock(on, fresh) {
+  const d = $('#chatdock'), m = $('#main'), nav = $('#nav'); if (!d) return;
+  if (!on) { d.classList.add('hide'); d.innerHTML = ''; if (m) m.style.paddingBottom = ''; return; }
+  if (fresh || !d.innerHTML) {
+    d.innerHTML = `<div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><button class="btn ghost sm" onclick="A.imgPick('')" title="ছবি পাঠান">📷</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div>`;
+  }
+  d.classList.remove('hide'); d.style.bottom = (nav ? nav.offsetHeight : 62) + 'px';
+  if (m) m.style.paddingBottom = (d.offsetHeight + (nav ? nav.offsetHeight : 62) + 16) + 'px';
+  if (fresh) { markSeen(curRoom()); scrollEnd(); setTimeout(scrollEnd, 120); }
 }
 function chatBadge() {
   const b = $('#chatbtn'); if (!b) return;
@@ -63,8 +77,8 @@ function chatBadge() {
 function chatRefresh() {
   const inChat = (location.hash || '').slice(1).split('?')[0] === 'chat', l = $('#chatlist');
   if (inChat && l) {
-    const el = $('#main'), atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
-    l.innerHTML = chatListHtml(); markSeen(curRoom()); const t = $('#roomtabs'); if (t) t.innerHTML = roomTabs(); const rb = $('#rbar'); if (rb) rb.innerHTML = replyBar('reply'); if (atEnd) el.scrollTop = el.scrollHeight;
+    const el = $('#main'), atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    l.innerHTML = chatListHtml(); markSeen(curRoom()); const t = $('#roomtabs'); if (t) t.innerHTML = roomTabs(); const rb = $('#rbar'); if (rb) rb.innerHTML = replyBar('reply'); chatDock(true, false); if (atEnd) scrollEnd();
   }
   const t = $('#thlist'); if (t && view.thread) { t.innerHTML = threadHtml(view.thread); t.scrollTop = t.scrollHeight; markSeen('t'); const rb = $('#thrbar'); if (rb) rb.innerHTML = replyBar('thReply'); }
   chatBadge();
@@ -73,11 +87,11 @@ function threadHtml(id) { const L = chatThread(id); return L.length ? L.map(chat
 const afterMenu = from => { if (from) A.thread(from); };
 
 Object.assign(A, {
-  room(r) { view.chatRoom = r; markSeen(r); chatRefresh(); const el = $('#main'); el.scrollTop = el.scrollHeight; const i = $('#chin'); if (i) i.placeholder = roomName(r) + ' — মেসেজ লিখুন…'; },
+  room(r) { view.chatRoom = r; markSeen(r); chatRefresh(); scrollEnd(); const i = $('#chin'); if (i) i.placeholder = roomName(r) + ' — মেসেজ লিখুন…'; },
   chatSend() {
     const i = $('#chin'); if (!i) return; const t = i.value.trim(); if (!t) return;
     const x = { text: t.slice(0, 1500), room: curRoom() }; if (view.reply) x.reply = view.reply;
-    if (chatPost(x)) { i.value = ''; view.chatDraft = ''; view.reply = null; chatRefresh(); const el = $('#main'); el.scrollTop = el.scrollHeight; i.focus(); }
+    if (chatPost(x)) { i.value = ''; view.chatDraft = ''; view.reply = null; chatRefresh(); scrollEnd(); i.focus(); }
   },
   msgMenu(id) {
     const m = S.chat[id]; if (!m || m._d) return; const from = view.thread || null, own = m.uid === SY.uid || isOwner();
@@ -135,7 +149,7 @@ Object.assign(A, {
   thread(id) {
     const o = S.orders[id]; if (!o) return; if (!chatOn()) return toast('টিম চ্যাটের জন্য ক্লাউড সিঙ্ক চালু থাকতে হবে');
     view.thread = id; markSeen('t');
-    const d = sheet(`💬 #${o.no} ${esc(o.customer || '')} — আলোচনা`, `<div id="thlist" class="thlist">${threadHtml(id)}</div><div class="chatbar" style="position:static"><div id="thrbar">${replyBar('thReply')}</div><div class="cbrow"><textarea id="thin" rows="1" placeholder="এই অর্ডার নিয়ে লিখুন…"></textarea><button class="btn sm" onclick="A.threadSend('${id}')">পাঠান</button></div></div>`);
+    const d = sheet(`💬 #${o.no} ${esc(o.customer || '')} — আলোচনা`, `<div id="thlist" class="thlist">${threadHtml(id)}</div><div class="chatbar" style="position:static"><div id="thrbar">${replyBar('thReply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.imgPick('${id}')" title="ছবি পাঠান">📷</button><textarea id="thin" rows="1" placeholder="এই অর্ডার নিয়ে লিখুন…"></textarea><button class="btn sm" onclick="A.threadSend('${id}')">পাঠান</button></div></div>`);
     const mo = new MutationObserver(() => { if (!document.body.contains(d)) { if (view.thread === id && !$('#sheet')) view.thread = null; mo.disconnect(); } }); mo.observe(document.body, { childList: true });
     const t = $('#thlist'); if (t) t.scrollTop = t.scrollHeight; chatBadge();
   },
@@ -149,3 +163,82 @@ Object.assign(A, {
     (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('✓ অর্ডারের তথ্য কপি হয়েছে')).catch(() => prompt('কপি করুন:', txt));
   }
 });
+
+/* ---------- photos: resized in the phone, small preview inside the message, full photo fetched only on tap ---------- */
+const IMGCACHE = {};
+function shrink(file, maxSide, q, maxBytes) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, maxSide / Math.max(im.width, im.height)), w = Math.max(1, Math.round(im.width * k)), h = Math.max(1, Math.round(im.height * k));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); cx.drawImage(im, 0, 0, w, h);
+      let qq = q, out = cv.toDataURL('image/jpeg', qq);
+      while (out.length * 0.75 > maxBytes && qq > 0.3) { qq -= 0.08; out = cv.toDataURL('image/jpeg', qq); }
+      res(out);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('ছবি পড়া যায়নি')); };
+    im.src = url;
+  });
+}
+Object.assign(A, {
+  imgPick(orderId) {
+    if (!chatOn()) return toast('টিম চ্যাটের জন্য ক্লাউড সিঙ্ক চালু থাকতে হবে');
+    let inp = $('#imgfile'); if (inp) inp.remove();
+    inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.id = 'imgfile'; inp.style.display = 'none'; document.body.appendChild(inp);
+    inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) A.imgPrep(f, orderId); inp.remove(); };
+    inp.click();
+  },
+  async imgPrep(file, orderId) {
+    try {
+      toast('ছবি ছোট করা হচ্ছে…');
+      const thumb = await shrink(file, 220, 0.6, 14000), full = await shrink(file, 1280, 0.72, 330000);
+      view.imgDraft = { thumb, full, orderId: orderId || '' };
+      sheet('📷 ছবি পাঠান', `<img class="cimg" style="max-width:100%;max-height:50vh" src="${full}">` + `<div class="os">আকার: প্রায় ${Math.round(full.length * 0.75 / 1024)} KB</div>` + fld('text', 'ক্যাপশন (ঐচ্ছিক, যেমন "এই প্রোডাক্টের দাম কত?")', 'text', ''),
+        d => { A.imgSend(vals(d).text || ''); }, 'পাঠান');
+    } catch (e) { toast(e.message || 'ছবি দেওয়া গেল না'); }
+  },
+  async imgSend(caption) {
+    const im = view.imgDraft; if (!im) return; view.imgDraft = null;
+    if (!chatOn() || !SY.db) return toast('অনলাইন ও ক্লাউড সিঙ্ক লাগবে');
+    const id = uid(), t = Date.now();
+    try {
+      await SY.db.collection(`shops/${SY.shop}/chatImages`).doc(id).set({ id, t, uid: SY.uid, data: im.full });
+    } catch (e) { return toast('ছবি পাঠানো যায়নি: ' + (e.message || '')); }
+    IMGCACHE[id] = im.full;
+    const x = { id, t, text: caption.slice(0, 500), thumb: im.thumb, imgId: id };
+    if (im.orderId) x.orderId = im.orderId; else x.room = curRoom();
+    chatPost(x); chatRefresh(); if (!im.orderId) scrollEnd();
+    toast('✓ ছবি পাঠানো হয়েছে');
+  },
+  async viewImg(mid) {
+    const m = S.chat[mid]; if (!m) return;
+    const d = document.createElement('div'); d.className = 'ov'; d.id = 'imgov'; d.style.cssText = 'z-index:60;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px';
+    d.innerHTML = `<button class="x" style="position:absolute;top:12px;right:12px;color:#fff" onclick="document.getElementById('imgov').remove()">${ico('x', 24)}</button><img id="imgbig" src="${m.thumb}" style="max-width:100%;max-height:78vh;border-radius:8px;filter:blur(0)"><div id="imgst" class="os" style="color:#ddd;margin-top:10px">${esc(m.text || '')}</div>`;
+    d.addEventListener('click', e => { if (e.target === d) d.remove(); }); document.body.appendChild(d);
+    const set = u => { const i = document.getElementById('imgbig'); if (i) i.src = u; const s = document.getElementById('imgst'); if (s && u !== m.thumb) s.innerHTML = esc(m.text || ''); };
+    if (IMGCACHE[m.imgId]) return set(IMGCACHE[m.imgId]);
+    const st = document.getElementById('imgst'); if (st) st.textContent = 'বড় ছবি আসছে…';
+    try {
+      const ds = await SY.db.collection(`shops/${SY.shop}/chatImages`).doc(m.imgId).get();
+      if (ds.exists) { IMGCACHE[m.imgId] = ds.data().data; set(IMGCACHE[m.imgId]); } else if (st) st.textContent = 'বড় ছবিটা আর নেই (মেয়াদ শেষে মুছে গেছে বা ডিলিট হয়েছে)';
+    } catch (e) { if (st) st.textContent = 'বড় ছবি আনা যায়নি — ইন্টারনেট দেখুন'; }
+  }
+});
+
+/* ---------- auto clean-up: chat older than N days (default 10) is deleted for everyone, freeing space ---------- */
+async function chatCleanup(force) {
+  if (!chatOn() || !SY.db) return;
+  try { if (!force && Date.now() - (+localStorage.bb_chat_clean || 0) < 6 * 3600 * 1000) return; localStorage.bb_chat_clean = String(Date.now()); } catch (e) { }
+  const cut = chatCutoff(), base = `shops/${SY.shop}`;
+  const old = Object.values(S.chat).filter(m => (m.t || 0) < cut);
+  try {
+    for (let i = 0; i < old.length; i += 400) { const b = SY.db.batch(); old.slice(i, i + 400).forEach(m => b.delete(SY.db.collection(`${base}/chat`).doc(m.id))); await b.commit(); }
+    old.forEach(m => { delete S.chat[m.id]; }); if (old.length) persist();
+    const q = await SY.db.collection(`${base}/chatImages`).where('t', '<', cut).limit(200).get();
+    if (!q.empty) { const b = SY.db.batch(); q.forEach(d => b.delete(d.ref)); await b.commit(); }
+    if (old.length) { chatRefresh(); }
+    return { msgs: old.length, imgs: q.size };
+  } catch (e) { /* offline or not allowed yet: try again next time */ }
+}
+setInterval(() => { try { chatCleanup(); } catch (e) { } }, 30 * 60 * 1000);

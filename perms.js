@@ -40,10 +40,11 @@
     expenses: { r: ['expenses_view'], w: ['expenses_edit'] },
     loansTaken: { r: ['loans_view'], w: ['loans_edit'] }, loanPayments: { r: ['loans_view'], w: ['loans_edit'] },
     loansGiven: { r: ['loans_view'], w: ['loans_edit'] }, loanCollections: { r: ['loans_view'], w: ['loans_edit'] },
-    chat: { r: ['orders_view'], w: ['orders_view'], own: true },   // team chat: anyone who can see orders; edit/soft-delete only your own messages (owner: any); anyone may set their own reaction
+    chat: { r: ['orders_view'], w: ['orders_view'], own: 'msg' },   // team chat: anyone who can see orders; edit/soft-delete only your own messages (owner: any); anyone may set their own reaction
+    chatImages: { r: ['orders_view'], w: ['orders_view'], own: 'blob', lazy: true },   // full-size chat photos: fetched only when someone taps a photo (never bulk-synced)
     settings: { r: ['*'], w: [] } // any active staff reads; only the owner writes
   };
-  const COLLS = Object.keys(ACCESS);
+  const ALLC = Object.keys(ACCESS), COLLS = ALLC.filter(c => !ACCESS[c].lazy);   // COLLS = collections synced to every device
 
   const has = (prof, p) => !prof ? false : prof.role === 'owner' ? true : !!(prof.perms && prof.perms[p]);
   const canRead = (prof, c) => { const a = ACCESS[c]; return !!prof && (prof.role === 'owner' || a.r.includes('*') || a.r.some(p => has(prof, p))); };
@@ -55,10 +56,17 @@
   /* ---------- Firestore security rules generated from ACCESS ---------- */
   function genRules() {
     const any = l => l.map(p => `can(shop, '${p}')`).join(' || ');
-    const blocks = COLLS.map(c => {
+    const blocks = ALLC.map(c => {
       const a = ACCESS[c];
       if (a.r.includes('*')) return `      match /${c}/{id} {\n        allow read: if isStaff(shop);\n        allow create, update: if isOwner(shop);\n      }`;
-      if (a.own) return `      match /${c}/{id} {\n        allow read: if ${any(a.r)};\n        // you may only post as yourself, and only edit or soft-delete your own messages (the owner may moderate)\n        allow create: if (${any(a.w)}) && request.resource.data.uid == request.auth.uid;\n        allow update: if (${any(a.w)}) && request.resource.data.uid == resource.data.uid\n          && ((resource.data.uid == request.auth.uid || isOwner(shop))\n              // anyone may add/change/remove only THEIR OWN reaction (react.<their uid>)\n              || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react', '_u'])\n                  && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])));\n      }`;
+      if (a.own) {
+        const age = "request.time.toMillis() - resource.data.t > 259200000";   // chat is auto-cleaned: anyone may delete items older than 3 days; the owner any time
+        const del = `        // auto-clean: the owner any time, anyone who can see orders only once an item is older than 3 days\n        allow delete: if isOwner(shop) || ((${any(a.w)}) && ${age});\n`;
+        const mk = (mode, c2) => mode === 'blob'
+          ? `      match /${c2}/{id} {\n        allow read: if ${any(a.r)};\n        // photos are write-once and posted as yourself\n        allow create: if (${any(a.w)}) && request.resource.data.uid == request.auth.uid;\n${del}      }`
+          : `      match /${c2}/{id} {\n        allow read: if ${any(a.r)};\n        // you may only post as yourself, and only edit or soft-delete your own messages (the owner may moderate)\n        allow create: if (${any(a.w)}) && request.resource.data.uid == request.auth.uid;\n        allow update: if (${any(a.w)}) && request.resource.data.uid == resource.data.uid\n          && ((resource.data.uid == request.auth.uid || isOwner(shop))\n              // anyone may add/change/remove only THEIR OWN reaction (react.<their uid>)\n              || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react', '_u'])\n                  && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])));\n${del}      }`;
+        return mk(a.own, c);
+      }
       if (a.status) return `      match /${c}/{id} {\n        allow read: if ${any(a.r)};\n        allow create: if (${any(a.w)}) && delOk(shop);\n        // 'status only' staff may change just these fields on an existing order\n        allow update: if ((${any(a.w)}) && delOk(shop))\n          || ((${any(a.status)}) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([${STATUS_FIELDS.map(f => "'" + f + "'").join(', ')}]));\n      }`;
       return `      match /${c}/{id} {\n        allow read: if ${any(a.r)};\n        allow create, update: if (${any(a.w)}) && delOk(shop);\n      }`;
     }).join('\n\n');
@@ -123,6 +131,6 @@ ${blocks}
 `;
   }
 
-  g.BBPerms = { STATUS_FIELDS, GROUPS, ALL, IMPLIES, PRESETS, ACCESS, COLLS, has, canRead, canWrite, fix, genRules };
+  g.BBPerms = { STATUS_FIELDS, GROUPS, ALL, IMPLIES, PRESETS, ACCESS, ALLC, COLLS, has, canRead, canWrite, fix, genRules };
   if (typeof module !== 'undefined') module.exports = g.BBPerms;
 })(typeof window !== 'undefined' ? window : globalThis);

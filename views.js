@@ -16,6 +16,13 @@ const greet = () => { const h = new Date().getHours(); return h < 5 ? 'শুভ
 const lockNote = what => `<div class="panel"><div class="pr"><span>${ico('lock', 15)} ${what}</span><b class="muted">লুকানো</b></div></div>`;
 
 /* ---------- chart (12 months) ---------- */
+const qbs = (ph, tr) => (ph ? `<button class="qb" aria-label="কল" onclick="event.stopPropagation();A.dial('${esc(ph)}')">${ico('phone', 14)}</button><button class="qb" aria-label="নম্বর কপি" onclick="event.stopPropagation();A.cp('${esc(ph)}','নম্বর')">${ico('copy', 14)}</button>` : '') + (tr ? `<button class="qb" aria-label="কনসাইনমেন্ট কপি" onclick="event.stopPropagation();A.cp('${esc(tr)}','কনসাইনমেন্ট নং')">${ico('copy', 14)}</button>` : '');
+const sc4 = (icon, label, val, tone, click = '') => `<div class="st ${click ? 'tap' : ''}" ${click ? `onclick="${click}"` : ''}><span class="sti t-${tone}">${ico(icon, 20)}</span><div><small>${label}</small><b>${val}</b></div></div>`;
+function donut(parts, label) {
+  const tot = parts.reduce((s, p) => s + p[1], 0), C = 2 * Math.PI * 42; let off = 0;
+  const arcs = tot ? parts.filter(p => p[1] > 0).map(p => { const len = C * p[1] / tot, dl = Math.max(len - 1.6, 0.6); const el = `<circle cx="60" cy="60" r="42" fill="none" stroke="${p[2]}" stroke-width="14" stroke-dasharray="${dl.toFixed(2)} ${(C - dl).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"/>`; off += len; return el; }).join('') : '';
+  return `<div class="dn"><svg viewBox="0 0 120 120" width="132" height="132" role="img" aria-label="${label}"><circle cx="60" cy="60" r="42" fill="none" stroke="var(--soft2)" stroke-width="14"/>${arcs}<text x="60" y="58" text-anchor="middle" class="dnn">${tot}</text><text x="60" y="73" text-anchor="middle" class="dnl">${label}</text></svg><div class="dnl2">${parts.map(p => `<div><i style="background:${p[2]}"></i><span>${p[0]}</span><b>${p[1]}</b></div>`).join('')}</div></div>`;
+}
 function chartSvg(months, showProfit) {
   const W = 320, H = 132, pl = 4, pb = 18, pt = 8, bw = (W - pl * 2) / 12;
   const mx = Math.max(1, ...months.map(m => m.sales), ...(showProfit ? months.map(m => m.booked) : [0])), mn = showProfit ? Math.min(0, ...months.map(m => m.booked)) : 0;
@@ -34,6 +41,14 @@ function vHome() {
   const y = today().slice(0, 4), months = (ov || sv) ? [...Array(12)].map((_, i) => agg(R, d => (d || '').startsWith(y + '-' + String(i + 1).padStart(2, '0')))) : null;
   const hero = `<div class="hero"><small>${greet()} · ${fmtD(today())}</small><h1>${esc(cfg().shop)}</h1><div class="hst">${ov ? `<div><span>আজকের অর্ডার</span><b>${at.orders}</b></div>` : ''}${ov || sv ? `<div><span>আজকের বিক্রি</span><b>${money(at.sales)}</b></div>` : ''}${ov ? `<div><span>কুরিয়ারে</span><b>${a.withCourier}</b></div>` : ''}</div></div>`;
   let h = hero + `<div class="chips sc" style="margin-top:14px">${RANGES.map(([k, l]) => `<button class="chip ${r === k ? 'on' : ''}" onclick="A.range('${k}')">${l}</button>`).join('')}</div>`;
+  if (ov) {
+    const okP = P.filter(x => x.status === 'OK').length, lowP = P.filter(x => x.status === 'Low Stock').length, outP = P.length - okP - lowP;
+    const recent = [...R.onl].sort((x, y) => n(y.o.no) - n(x.o.no)).slice(0, 5);
+    h += `<div class="sc4">${sc4('box', 'মোট অর্ডার', a.orders, 'ok', "A.nav('orders')")}${sc4('check', 'ডেলিভারড', a.delivered, 'ok', "A.repGo('','','Delivered')")}${sc4('list', 'পেন্ডিং/কনফার্ম', a.pending, 'am', "A.repGo('','','Pending')")}${sc4('swap', 'রিটার্ন', a.returned, 'err', "A.repGo('','','Returned')")}</div>`;
+    h += `<div class="two"><div class="panel"><b class="ph">অর্ডার ওভারভিউ</b>${donut([['ডেলিভারড', a.delivered, 'var(--b)'], ['কুরিয়ারে', a.withCourier, 'var(--am)'], ['পেন্ডিং', a.pending, 'var(--info)'], ['রিটার্ন', a.returned, 'var(--err)'], ['ক্যানসেল', Math.max(0, a.orders - a.delivered - a.withCourier - a.pending - a.returned), 'var(--gray)']], 'অর্ডার')}</div>`;
+    h += canR('products') ? `<div class="panel"><b class="ph">স্টক ওভারভিউ</b>${donut([['ঠিক আছে', okP, 'var(--b)'], ['লো স্টক', lowP, 'var(--am)'], ['স্টক শেষ', outP, 'var(--err)']], 'প্রোডাক্ট')}</div>` : '';
+    h += `</div><div class="panel"><div class="oh"><b class="ph">সাম্প্রতিক অর্ডার</b><a class="lnk" onclick="A.nav('orders')">সব দেখুন</a></div>${recent.map(({ o, r }) => `<div class="li rc" onclick="A.order('${o.id}')"><span class="av">${esc((o.customer || '?').trim().charAt(0).toUpperCase())}</span><div class="lm"><b>#${o.no} ${esc(o.customer || '')}</b><small>${fmtD(o.date)} · ${money(r.total)}</small></div>${badge(o.status)}</div>`).join('') || '<p class="muted">এখনো অর্ডার নেই</p>'}</div>`;
+  }
   if (ov || sv || can('purchases_view') || can('expenses_view')) {
     h += `<h3>পারফরম্যান্স</h3><div class="kg">${ov || sv ? kc('chart', 'মোট বিক্রি', money(a.sales)) : ''}${can('purchases_view') ? kc('cart', 'মোট ক্রয়', money(a.purchase)) : ''}${can('expenses_view') ? kc('receipt', 'মোট খরচ', money(a.exp)) : ''}${cp ? kc('wallet', 'নেট প্রফিট (কুরিয়ার/COD চার্জ বাদে)', money(a.booked), a.booked < 0 ? 'neg' : 'pos') + kc('check', 'রিয়েলাইজড প্রফিট (ডেলিভারড)', money(a.realized), a.realized < 0 ? 'neg' : 'pos') : ''}${cc ? kc('alert', 'ড্যামেজ/লস', money(a.dmg)) : ''}</div>`;
     if (cp && ov) h += `<h3>ডেলিভারড ও কুরিয়ার চার্জ</h3><div class="kg">${kc('check', 'ডেলিভারড প্রফিট (শুধু প্রোডাক্ট)', money(a.dProfit), a.dProfit < 0 ? 'neg' : 'pos')}${kc('wallet', 'ডেলিভারড নেট প্রফিট', money(a.dNet), a.dNet < 0 ? 'neg' : 'pos')}${kc('truck', 'কুরিয়ার চার্জ', money(a.courier))}${kc('receipt', 'COD চার্জ + আলাদা ফি', money(a.codFee + a.cfee))}${a.retInc ? kc('swap', 'রিটার্নে পাওয়া চার্জ', money(a.retInc), 'pos') : ''}</div><p class="note">ডেলিভারড প্রফিট = শুধু ডেলিভারড অর্ডারের (বিক্রয়মূল্য − কেনা দাম)। ডেলিভারড নেট = ডেলিভারড গ্রস − কুরিয়ার চার্জ − COD চার্জ − ফি + রিটার্ন চার্জ − খরচ − ড্যামেজ।</p>`;
@@ -50,7 +65,7 @@ function vHome() {
     const assets = s.cash + s.stockValue + s.courierValue + s.codDue + s.customerDue + s.givenOut;
     h += `<div class="panel"><b>মোট ব্যবসার মূল্য</b><div class="pr"><span class="muted">ক্যাশ + স্টক + কুরিয়ারে পণ্য + COD পাওনা + কাস্টমার বাকি + দেওয়া লোন</span><b>${money(assets)}</b></div><div class="pr"><span>− সাপ্লায়ার দেনা</span><b>${money(-s.supplierPayable)}</b></div><div class="pr tot"><span>নিট মূল্য</span><b>${money(assets - s.supplierPayable)}</b></div></div>`;
   }
-  if (ov) h += `<h3>অর্ডার</h3><div class="kg">${kc('box', 'মোট অর্ডার', a.orders, '', "A.nav('orders')")}${kc('list', 'পেন্ডিং/কনফার্ম', a.pending, '', "A.repGo('','','Pending')")}${kc('truck', 'কুরিয়ারে পার্সেল', a.withCourier, '', "A.repGo('','','Shipped')")}${kc('check', 'ডেলিভারড', a.delivered, 'pos', "A.repGo('','','Delivered')")}${kc('swap', 'রিটার্ন', a.returned, a.returned ? 'neg' : '', "A.repGo('','','Returned')")}${kc('alert', 'লো/আউট স্টক', P.filter(x => x.status !== 'OK').length, '', "A.nav('products')")}</div>`;
+  if (ov) h += `<h3>অর্ডার</h3><div class="kg">${kc('truck', 'কুরিয়ারে পার্সেল', a.withCourier, '', "A.repGo('','','Shipped')")}${kc('alert', 'লো/আউট স্টক', P.filter(x => x.status !== 'OK').length, '', "A.nav('products')")}</div>`;
   if (months) h += `<h3>মাসওয়ারি বিক্রি (${y})</h3><div class="panel">${chartSvg(months, cp)}</div>`;
   if (canR('products')) {
     h += `<h3>টপ সেলিং</h3><div class="panel">${top.map(x => `<div class="li"><span>${esc(x.p.name)}</span><b>${x.sold} পিস</b></div>`).join('') || '<p class="muted">এখনো বিক্রি নেই</p>'}</div>`;
@@ -70,7 +85,7 @@ function orderRows() {
 function orderCard({ o, r }) {
   const sm = !!view.sel, on = sm && view.sel[o.id], nx = NEXT[o.status], dist = dKey(o), src = normSource(o.source);
   return `<div class="oc ${on ? 'selc' : ''}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div>` +
-    `<div class="os">${esc(o.phone || '')} · ${fmtD(o.date)}</div><div class="os">${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` +
+    `<div class="os">${esc(o.phone || '')}${qbs(o.phone)} · ${fmtD(o.date)}</div><div class="os">${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` +
     `<div class="oh"><span><b>${money(r.total)}</b>${r.noItems ? ' <small class="warn">⚠ আইটেম নেই</small>' : ''}</span><span class="${r.cod || r.due > 0 ? 'rd' : 'gr'}">${r.cod ? 'COD ' + money(r.cod) : r.due > 0 ? 'বাকি ' + money(r.due) : r.paid >= r.total && r.total ? '✓ পেইড' : ''}</span></div>` +
     (!sm && ((nx && can('orders_status')) || can('orders_view')) ? `<div class="oact">${canBook(o) ? `<button class="btn sm" onclick="event.stopPropagation();A.sfBook('${o.id}')">${ico('truck', 14)} Steadfast বুক</button>` : ''}${nx && can('orders_status') ? `<button class="btn sm" onclick="event.stopPropagation();A.status('${o.id}','${nx[0]}')">${ico('check', 14)} ${nx[1]}</button>` : ''}<button class="btn sm ghost" onclick="event.stopPropagation();A.labelSheet(['${o.id}'])">${ico('printer', 14)} লেবেল</button></div>` : '') +
     (!sm && o.status === 'Pending' && can('orders_status') ? `<div class="ccall">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" title="${CALLS[k][1]}" onclick="event.stopPropagation();A.call('${o.id}','${k}')">${CALLS[k][0]}${o.call === k ? '' : ' <small>' + CALLS[k][1] + '</small>'}</button>`).join('')}</div>` : '') + `</div>`;
@@ -94,7 +109,7 @@ function vOrders() {
 function courierMatches() { const q = (view.cq || '').trim().toLowerCase(); if (!q) return []; return R.onl.filter(({ o }) => [o.tracking, o.phone, o.customer, o.no].join(' ').toLowerCase().includes(q)).slice(0, 8); }
 function cqCard({ o, r }) {
   const q = ['Delivered', 'Return Pending', 'Returned', 'Cancelled', 'Shipped'], ed = can('orders_status');
-  return `<div class="oc" onclick="A.order('${o.id}')"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div><div class="os">${esc(o.phone || '')} · ${esc(o.courier || '—')} · ${esc(o.tracking || 'কনসাইনমেন্ট নেই')}${o.cstatus ? ' · <b>' + esc(CST[o.cstatus] || o.cstatus) + '</b>' : ''}</div><div class="oh"><span><b>${money(r.total)}</b></span><span class="rd">${r.cod ? 'COD ' + money(r.cod) : ''}</span></div>${ed ? `<div class="chips" onclick="event.stopPropagation()">${q.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="A.status('${o.id}','${s}');view.cq='';render()">${STBN[s]}</button>`).join('')}</div>` : ''}</div>`;
+  return `<div class="oc" onclick="A.order('${o.id}')"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div><div class="os">${esc(o.phone || '')}${qbs(o.phone)} · ${esc(o.courier || '—')} · ${esc(o.tracking || 'কনসাইনমেন্ট নেই')}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? ' · <b>' + esc(CST[o.cstatus] || o.cstatus) + '</b>' : ''}</div><div class="oh"><span><b>${money(r.total)}</b></span><span class="rd">${r.cod ? 'COD ' + money(r.cod) : ''}</span></div>${ed ? `<div class="chips" onclick="event.stopPropagation()">${q.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="A.status('${o.id}','${s}');view.cq='';render()">${STBN[s]}</button>`).join('')}</div>` : ''}</div>`;
 }
 function renderCourierResults() { const e = $('#cqres'); if (e) e.innerHTML = courierMatches().map(cqCard).join('') || (view.cq ? '<p class="muted">কিছু পাওয়া যায়নি</p>' : ''); if (!view.cq) { const i = $('#cqin'); if (i) { i.value = ''; i.focus(); } } }
 function vCourier() {
@@ -235,15 +250,15 @@ function render() {
   let v = (location.hash || '#home').slice(1).split('?')[0]; if (!VIEWS[v] || !allowed(v)) v = 'home';
   $('#shopname').textContent = cfg().shop; $('#gearbtn').innerHTML = ico('gear', 19); $('#gearbtn').style.display = locked ? 'none' : '';
   const nav = $('#nav'), fab = $('#fab');
-  if (locked) { el.innerHTML = vLogin(); nav.classList.add('hide'); fab.classList.add('hide'); setSync(SY.st); return; }
+  if (locked) { el.innerHTML = vLogin(); nav.classList.add('hide'); fab.classList.add('hide'); chatDock(false); setSync(SY.st); return; }
   el.innerHTML = VIEWS[v]();
   const tabs = [['home', 'home', 'হোম', 1], ['orders', 'box', 'অর্ডার', can('orders_view')], ['courier', 'truck', 'কুরিয়ার', can('orders_view')], ['sales', 'bag', 'বিক্রি', can('sales_view')], ['more', 'grid', 'আরও', 1]].filter(x => x[3]);
   const act = tabs.some(t => t[0] === v) ? v : 'more';
   nav.classList.remove('hide'); nav.innerHTML = tabs.map(([k, i, l]) => `<button class="${k === act ? 'on' : ''}" onclick="A.nav('${k}')"><span class="pill">${ico(i, 21)}</span>${l}</button>`).join('');
   const canAdd = ['orders_edit', 'sales_edit', 'purchases_edit', 'expenses_edit', 'damages_edit', 'cash_edit'].some(can) || can('orders_view');
   fab.classList.toggle('hide', !canAdd || v === 'chat'); fab.innerHTML = ico('plus', 28);
-  chatBadge(); if (v === 'chat') { markSeen(curRoom()); chatBadge(); const m = $('#main'); m.scrollTop = m.scrollHeight; }
-  el.scrollTop = lastView === v ? st : 0; lastView = v; setSync(SY.st);
+  el.scrollTop = lastView === v ? st : 0; const was = lastView; lastView = v; setSync(SY.st);
+  chatDock(v === 'chat' && !!cloudCfg(), was !== 'chat'); chatBadge();
 }
 window.render = render;
 window.addEventListener('hashchange', () => { view.sup = null; view.sel = null; render(); });

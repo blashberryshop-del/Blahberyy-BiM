@@ -159,6 +159,16 @@ service cloud.firestore {
               // anyone may add/change/remove only THEIR OWN reaction (react.<their uid>)
               || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react', '_u'])
                   && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])));
+        // auto-clean: the owner any time, anyone who can see orders only once an item is older than 3 days
+        allow delete: if isOwner(shop) || ((can(shop, 'orders_view')) && request.time.toMillis() - resource.data.t > 259200000);
+      }
+
+      match /chatImages/{id} {
+        allow read: if can(shop, 'orders_view');
+        // photos are write-once and posted as yourself
+        allow create: if (can(shop, 'orders_view')) && request.resource.data.uid == request.auth.uid;
+        // auto-clean: the owner any time, anyone who can see orders only once an item is older than 3 days
+        allow delete: if isOwner(shop) || ((can(shop, 'orders_view')) && request.time.toMillis() - resource.data.t > 259200000);
       }
 
       match /settings/{id} {
