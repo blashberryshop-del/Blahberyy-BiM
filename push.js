@@ -121,11 +121,13 @@ Object.assign(A, {
   }
 });
 function fraudShow(box, id, d, at) {
-  const T = d.total || { total: 0, success: 0, cancel: 0, rate: null }, cs = d.couriers || [];
-  const lv = !T.total ? ['🆕', 'নতুন কাস্টমার — কোনো কুরিয়ারে আগের হিস্টরি নেই', 'b-gray'] : T.rate >= 85 ? ['🟢', 'ভালো — বেশিরভাগ পার্সেল ডেলিভারড', 'b-green'] : T.rate >= 70 ? ['🟠', 'সতর্ক থাকুন — কিছু পার্সেল ফেরত/ক্যানসেল হয়েছে', 'b-amber'] : ['🔴', 'ঝুঁকিপূর্ণ — অনেক পার্সেল ফেরত/ক্যানসেল হয়েছে', 'b-red'];
+  const T = d.total || { total: 0, success: 0, cancel: 0, rate: null }, cs = (d.couriers || []).filter(c => c.total || c.rating), RP = d.reports || [];
+  let lv = !T.total ? ['🆕', 'নতুন কাস্টমার — কোনো কুরিয়ারে আগের হিস্টরি নেই', 'b-gray'] : T.rate >= 85 ? ['🟢', 'ভালো — বেশিরভাগ পার্সেল ডেলিভারড', 'b-green'] : T.rate >= 70 ? ['🟠', 'সতর্ক থাকুন — কিছু পার্সেল ফেরত/ক্যানসেল হয়েছে', 'b-amber'] : ['🔴', 'ঝুঁকিপূর্ণ — অনেক পার্সেল ফেরত/ক্যানসেল হয়েছে', 'b-red'];
+  if (RP.length) lv = ['🔴', 'অন্য দোকানদার এই নম্বরে ফ্রড রিপোর্ট করেছে — সাবধান', 'b-red'];   // a merchant report outranks a good ratio
   const rows = cs.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${c.total || (c.rating ? '—' : 0)}</td><td class="gr">${c.success}</td><td class="rd">${c.cancel}</td><td>${c.total ? Math.round(c.success / c.total * 100) + '%' : (c.rating ? esc(c.rating) : '—')}</td></tr>`).join('');
   box.innerHTML = `<div class="oh"><b>🌐 সব দোকানের হিস্টরি</b><span class="bd ${lv[2]}">${lv[0]} ${T.total ? (T.rate + '% সফল') : 'নতুন'}</span></div><div class="os">${lv[1]}</div>` +
     (T.total ? `<div class="pr"><span>মোট পার্সেল (সব কুরিয়ার, সব দোকান)</span><b>${T.total}</b></div><div class="pr"><span>ডেলিভারড / ক্যানসেল-ফেরত</span><b><span class="gr">${T.success}</span> / <span class="rd">${T.cancel}</span></b></div>` : '') +
     (rows ? `<table class="ft"><tr><th>কুরিয়ার</th><th>মোট</th><th>সফল</th><th>ক্যানসেল</th><th>রেট</th></tr>${rows}</table>` : (d.raw ? `<p class="note">উত্তরের ধরন চেনা যায়নি:</p><textarea class="code" readonly style="min-height:90px">${esc(d.raw)}</textarea>` : ''));
-  box.innerHTML += `<div class="os">${new Date(at).toLocaleString('bn-BD')} এ দেখা · <a class="lnk" onclick="A.fraudAll('${id}',true)">আবার চেক</a> · তথ্য FraudBD থেকে (১২ ঘণ্টা সেভ থাকে)</div>`;
+  if (RP.length) box.innerHTML += `<h3>⚠ ফ্রড রিপোর্ট (${RP.length})</h3>` + RP.map(x => `<div class="li"><span><b>${esc(x.name || 'নাম নেই')}</b><br><small class="muted">${esc(x.details || '')}</small></span><small class="muted" style="text-align:right">${esc(x.courier)}<br>${esc(x.date)}</small></div>`).join('');
+  box.innerHTML += `<div class="os">${new Date(at).toLocaleString('bn-BD')} এ দেখা · <a class="lnk" onclick="A.fraudAll('${id}',true)">আবার চেক</a> · তথ্য ${esc(d.provider || 'ফ্রড-ডেটা সার্ভিস')} থেকে (১২ ঘণ্টা সেভ থাকে)</div>`;
 }
