@@ -13,10 +13,18 @@ const chatGroup = room => chatAll().filter(m => !isThreadMsg(m) && msgRoom(m) ==
 const chatThread = id => chatAll().filter(m => m.orderId === id && !m.card);
 const chatCount = id => chatThread(id).length;
 const seenMap = () => { try { return JSON.parse(localStorage.bb_chat_seen2 || '{}'); } catch (e) { return {}; } };
-const markSeen = key => { try { const s = seenMap(), now = Date.now(); const l = chatAll(); s[key] = Math.max(now, l.length ? l[l.length - 1].t || 0 : 0); localStorage.bb_chat_seen2 = JSON.stringify(s); } catch (e) { } };
+// header badge = messages from others that this device has not "seen" yet. Seen = the chat was opened (any room / order thread) or we replied. Tracked by message id, so
+// another phone's wrong clock can never leave the badge stuck (and clearing site data does not turn old history into "new").
+let SEENIDS = null;
+const seenIds = () => { if (!SEENIDS) { try { const a = JSON.parse(localStorage.bb_chat_ids || 'null'); if (a) SEENIDS = new Set(a); } catch (e) { } } return SEENIDS; };
+const markAll = () => { try { const cur = chatAll().map(m => m.id); if (!cur.length) return; const s = seenIds() || new Set(); cur.forEach(i => s.add(i)); SEENIDS = s; localStorage.bb_chat_ids = JSON.stringify([...s].slice(-800)); } catch (e) { } };
+const markSeen = key => { try { const s = seenMap(); s[key] = Math.max(Date.now(), chatAll().reduce((a, m) => Math.max(a, m.t || 0), 0)); localStorage.bb_chat_seen2 = JSON.stringify(s); } catch (e) { } if (!document.hidden) markAll(); };
 const unreadIn = (key, f) => { const t = seenMap()[key] || 0; return chatAll().filter(m => f(m) && (m.t || 0) > t && m.uid !== SY.uid).length; };
 const roomUnread = room => unreadIn(room, m => !isThreadMsg(m) && msgRoom(m) === room);
-const chatUnread = () => ROOMS.reduce((a, r) => a + roomUnread(r), 0) + unreadIn('t', isThreadMsg);
+const chatUnread = () => {
+  const s = seenIds(); if (!s) { if (chatAll().length) markAll(); return 0; }       // first run on this device: existing history is not "new"
+  return chatAll().filter(m => m.uid !== SY.uid && !s.has(m.id)).length;
+};
 const hhmm = t => t ? new Date(t).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; };
 const curRoom = () => view.chatRoom === 'g2' ? 'g2' : 'g1';
@@ -27,7 +35,7 @@ function orderText(o, r) {
 function chatPost(extra) {
   if (!chatOn() || !canW('chat')) { toast('চ্যাটের অনুমতি/ক্লাউড সিঙ্ক নেই'); return null; }
   const rec = Object.assign({ id: uid(), t: Date.now(), uid: SY.uid, name: (profile && profile.name) || '', text: '' }, extra);
-  put('chat', rec); return rec;
+  put('chat', rec); markAll(); if (typeof pushChat === 'function') pushChat(rec); return rec;
 }
 const msgPreview = m => m.thumb && !m.text ? '📷 ছবি' : m.card ? `📦 অর্ডার #${(m.snap && m.snap.no) || ''} ${(m.snap && m.snap.customer) || ''}` : clip(m.text, 70);
 function reactHtml(m) {
@@ -71,7 +79,7 @@ function chatDock(on, fresh) {
 function chatBadge() {
   const b = $('#chatbtn'); if (!b) return;
   const on = chatOn(), u = on ? chatUnread() : 0;
-  b.style.display = on ? '' : 'none'; b.innerHTML = ico('chat', 19) + (u ? `<span class="nbadge">${u > 99 ? '99+' : u}</span>` : '');
+  b.style.display = on ? '' : 'none'; b.classList.toggle('unread', u > 0); b.innerHTML = ico('chat', 19) + (u ? `<span class="nbadge">${u > 99 ? '99+' : u}</span>` : '');
 }
 // update chat pieces in place (never a full render, so the keyboard/draft are not disturbed)
 function chatRefresh() {

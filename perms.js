@@ -42,6 +42,7 @@
     loansGiven: { r: ['loans_view'], w: ['loans_edit'] }, loanCollections: { r: ['loans_view'], w: ['loans_edit'] },
     chat: { r: ['orders_view'], w: ['orders_view'], own: 'msg' },   // team chat: anyone who can see orders; edit/soft-delete only your own messages (owner: any); anyone may set their own reaction
     chatImages: { r: ['orders_view'], w: ['orders_view'], own: 'blob', lazy: true },   // full-size chat photos: fetched only when someone taps a photo (never bulk-synced)
+    pushSubs: { r: ['orders_view'], w: ['orders_view'], own: 'sub', lazy: true },   // one doc per device that turned notifications on: who may be notified. Fetched only when something is sent
     settings: { r: ['*'], w: [] } // any active staff reads; only the owner writes
   };
   const ALLC = Object.keys(ACCESS), COLLS = ALLC.filter(c => !ACCESS[c].lazy);   // COLLS = collections synced to every device
@@ -62,7 +63,9 @@
       if (a.own) {
         const age = "request.time.toMillis() - resource.data.t > 259200000";   // chat is auto-cleaned: anyone may delete items older than 3 days; the owner any time
         const del = `        // auto-clean: the owner any time, anyone who can see orders only once an item is older than 3 days\n        allow delete: if isOwner(shop) || ((${any(a.w)}) && ${age});\n`;
-        const mk = (mode, c2) => mode === 'blob'
+        const mk = (mode, c2) => mode === 'sub'
+          ? `      match /${c2}/{id} {\n        allow read: if ${any(a.r)};\n        // a device registers itself; any teammate's sender may remove dead (expired) registrations\n        allow create: if (${any(a.w)}) && request.resource.data.uid == request.auth.uid;\n        allow update: if (${any(a.w)}) && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;\n        allow delete: if isOwner(shop) || (${any(a.w)});\n      }`
+          : mode === 'blob'
           ? `      match /${c2}/{id} {\n        allow read: if ${any(a.r)};\n        // photos are write-once and posted as yourself\n        allow create: if (${any(a.w)}) && request.resource.data.uid == request.auth.uid;\n${del}      }`
           : `      match /${c2}/{id} {\n        allow read: if ${any(a.r)};\n        // you may only post as yourself, and only edit or soft-delete your own messages (the owner may moderate)\n        allow create: if (${any(a.w)}) && request.resource.data.uid == request.auth.uid;\n        allow update: if (${any(a.w)}) && request.resource.data.uid == resource.data.uid\n          && ((resource.data.uid == request.auth.uid || isOwner(shop))\n              // anyone may add/change/remove only THEIR OWN reaction (react.<their uid>)\n              || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react', '_u'])\n                  && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])));\n${del}      }`;
         return mk(a.own, c);

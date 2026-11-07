@@ -177,6 +177,25 @@ textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;min-h
   .ov{align-items:center}.sh{border-radius:24px;max-height:88%}
   #toast{bottom:30px}
 }
+
+/* ===== v14 order flow: orders page vs courier page colours, stages, fraud check ===== */
+.oc.oc-ord{border-left:5px solid var(--am);background:linear-gradient(90deg,rgba(245,165,36,.14),transparent 46%),var(--card)}
+.oc.oc-cur{border-left:5px solid var(--info);background:linear-gradient(90deg,rgba(21,101,192,.10),transparent 46%),var(--card)}
+.oc.st-entry{border-left-color:#d81b60;background:linear-gradient(90deg,rgba(216,27,96,.10),transparent 46%),var(--card)}
+.oc.st-review{border-left-color:#039be5}.oc.st-shipped{border-left-color:#00897b;background:linear-gradient(90deg,rgba(0,137,123,.10),transparent 46%),var(--card)}
+.oc.st-pending{border-left-color:#7e57c2;background:linear-gradient(90deg,rgba(126,87,194,.11),transparent 46%),var(--card)}
+.oc.st-delivered{border-left-color:#2e9e50;background:linear-gradient(90deg,rgba(46,158,80,.10),transparent 46%),var(--card)}
+.oc.st-rto{border-left-color:#e53935;background:linear-gradient(90deg,rgba(229,57,53,.10),transparent 46%),var(--card)}
+.oc.st-returned{border-left-color:#78909c;background:linear-gradient(90deg,rgba(120,144,156,.12),transparent 46%),var(--card)}
+.stg{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;color:#fff;background:var(--gray);margin:2px 4px 2px 0;vertical-align:middle}
+.stg-entry{background:#d81b60}.stg-review{background:#039be5}.stg-shipped{background:#00897b}.stg-pending{background:#7e57c2}.stg-delivered{background:#2e9e50}.stg-rto{background:#e53935}.stg-returned{background:#78909c}
+.cd{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}
+.legend{margin:0 2px 8px;font-size:12px}.lg{display:inline-block;width:12px;height:12px;border-radius:4px;margin:0 5px 0 10px;vertical-align:-2px}.lg:first-child{margin-left:0}.lg-ord{background:var(--am)}.lg-cur{background:var(--info)}
+.btn.warnb{background:var(--am);color:#3a2600;box-shadow:none}
+.qb.fd-bad{background:var(--errb);color:var(--err)}.qb.fd-warn{background:var(--amb);color:var(--amt)}.qb.fd-good{background:var(--okb);color:var(--ok)}
+.ft{width:100%;border-collapse:collapse;margin:4px 0 8px;font-size:13.5px}.ft th{font-size:12px;color:var(--mut);font-weight:600;text-align:center;padding:6px 4px;border-bottom:1px solid var(--line)}.ft th:first-child,.ft td:first-child{text-align:left}.ft td{text-align:center;padding:8px 4px;border-bottom:1px solid var(--line)}
+.tb.unread{background:var(--errb);color:var(--err);animation:ring 1.6s ease-in-out 2}
+@keyframes ring{0%,100%{transform:rotate(0)}15%{transform:rotate(-12deg)}30%{transform:rotate(10deg)}45%{transform:rotate(-6deg)}60%{transform:rotate(4deg)}}
 </style>
 </head>
 <body>
@@ -197,6 +216,8 @@ textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;min-h
 <script src="actions.js"></script>
 <script src="chat.js"></script>
 <script src="courier.js"></script>
+<script src="flow.js"></script>
+<script src="push.js"></script>
 <script src="views.js"></script>
 <script src="boot.js"></script>
 </body>

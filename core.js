@@ -14,12 +14,12 @@
 
   /* ---------- order source (FB / TikTok / Inbox ...) ---------- */
   const SRC = {
-    TikTok: ['tiktok', 'tik tok', 'tt', 'টিকটক'], Facebook: ['facebook', 'fb', 'f.b', 'face book', 'fb page', 'facebook page', 'page', 'ফেসবুক'],
-    Inbox: ['inbox', 'messenger', 'msg', 'message', 'ইনবক্স', 'মেসেঞ্জার'], WhatsApp: ['whatsapp', 'whats app', 'wa', 'হোয়াটসঅ্যাপ'],
+    Page: ['page', 'pg', 'fb', 'f.b', 'facebook', 'face book', 'fb page', 'facebook page', 'inbox', 'messenger', 'msg', 'message', 'ফেসবুক', 'পেজ', 'ইনবক্স', 'মেসেঞ্জার'],
+    TikTok: ['tiktok', 'tik tok', 'tt', 'টিকটক'], WhatsApp: ['whatsapp', 'whats app', 'wa', 'wp', 'হোয়াটসঅ্যাপ', 'হোয়াটসঅ্যাপ'], Imo: ['imo', 'ইমো'],
     Instagram: ['instagram', 'insta', 'ig', 'ইনস্টাগ্রাম'], Website: ['website', 'web', 'site', 'ওয়েবসাইট'], 'Phone Call': ['call', 'phone call', 'phone', 'কল'],
     'Offline/Shop': ['offline', 'shop', 'walk in', 'walkin', 'walk-in', 'দোকান'], YouTube: ['youtube', 'yt', 'ইউটিউব'], Referral: ['referral', 'refer', 'reference', 'রেফার']
   };
-  const srcKey = s => String(s || '').toLowerCase().replace(/[:：.,;!\s]+$/g, '').replace(/\s+(?:order|ad|ads|live|group)$/, '').trim();
+  const srcKey = s => String(s || '').toLowerCase().replace(/[:：.,;!\s]+$/g, '').replace(/\s+(?:order|ad|ads|live|group|number|num|no|নম্বর|নাম্বার)$/, '').trim();
   function matchSource(s) { const k = srcKey(s); if (!k) return null; for (const [name, list] of Object.entries(SRC)) if (list.includes(k)) return name; return null; }
   function normSource(s) { s = String(s || '').trim().replace(/[:：]+$/, '').trim(); if (!s) return ''; return matchSource(s) || s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -37,9 +37,12 @@
     const nm = t.match(/(?:note|নোট|remarks?|comment)\s*[:：\-]\s*([^\n]*)/i);
     if (nm) { note = nm[1].replace(/[:：\s]+$/, '').trim(); t = t.replace(nm[0], '\n'); }
     t = t.replace(/\b(?:tk|taka)\b|৳|টাকা/gi, ' ');
+    if (!source) { const raw = t.split('\n').map(l => l.trim()).filter(Boolean); for (let i = 1; i < raw.length && !source; i++) { const m = raw[i].match(/^(whatsapp|whats app|imo|ইমো|হোয়াটসঅ্যাপ)\s*(?:number|num|no|নম্বর|নাম্বার)?\s*[:：\-]?\s*$/i); if (m) source = m[1]; } }
     const lines = t.split('\n').map(s => s.replace(/^\s*(?:customer\s*name|name|নাম|address|add|ঠিকানা|phone|number|num|no|mobile|mob|contact|cell|whatsapp|ফোন|মোবাইল|নাম্বার|নম্বর)\s*[:：\-]\s*/i, '').trim()).filter(s => s && !/^[:：\-,\s]+$/.test(s));
-    // a bare line like "tiktok" is the source
-    for (let i = lines.length - 1; i > 0 && !source; i--) if (matchSource(lines[i])) { source = lines[i]; lines.splice(i, 1); }
+    // a bare line like "tiktok" / "- Imo" / "(Page)" / "WhatsApp number:" (usually just under or beside the bill) is the source
+    const cand = l => l.replace(/^[\s\-–—:：,|/()\[\]•.]+|[\s\-–—:：,|/()\[\]•.]+$/g, '');
+    for (let i = lines.length - 1; i > 0 && !source; i--) if (matchSource(cand(lines[i]))) { source = cand(lines[i]); lines.splice(i, 1); }
+    for (let i = lines.length - 1; i > 0 && source; i--) { const k = matchSource(cand(lines[i])); if (k && k === matchSource(source)) lines.splice(i, 1); }   // drop the source line itself from the address
     if (!source && matchSource(note)) { source = note; note = ''; }
     const name = lines.shift() || '';
     const address = lines.join(', ');

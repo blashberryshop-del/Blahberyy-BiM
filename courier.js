@@ -21,7 +21,7 @@ const API = {
 };
 const isSF = o => /steadfast/i.test(o.courier || '');
 const sfRef = o => o.cid ? { k: 'cid', v: String(o.cid) } : /^\d+$/.test(String(o.tracking || '').trim()) ? { k: 'cid', v: String(o.tracking).trim() } : /^[A-Za-z0-9_-]{4,40}$/.test(String(o.tracking || '').trim()) ? { k: 'code', v: String(o.tracking).trim() } : null;
-const canBook = o => API.ok() && can('orders_edit') && !o.cid && ['Pending', 'Confirmed'].includes(o.status);
+const canBook = o => API.ok() && can('orders_edit') && !o.cid && o.status === 'Confirmed' && itemsOk(o);   // only orders in the courier page's Entry stage
 
 Object.assign(A, {
   /* ----- settings helpers ----- */
@@ -49,6 +49,8 @@ Object.assign(A, {
     if (!can('orders_edit')) return toast('অর্ডার এডিটের অনুমতি নেই');
     if (!API.ok()) return toast('আগে সেটিংসে কুরিয়ার API সেট করুন');
     if (o.cid) return toast('এই অর্ডার আগেই বুক করা আছে (CID ' + o.cid + ')');
+    if (o.status !== 'Confirmed') return toast('আগে অর্ডারটা কনফার্ম করুন — কনফার্ম হলে কুরিয়ার পেজের Entry-তে আসবে, তখন বুক হবে');
+    if (!itemsOk(o)) return toast('আইটেম ও পরিমাণ দিন, তারপর বুক করুন');
     const r = R.O[id] || { total: 0 }, phone = String(o.phone || '').replace(/\D/g, '').replace(/^88(?=01)/, ''), addr = String(o.address || '').trim();
     const cod = o.pay === 'Cash on Delivery' ? Math.max(Math.round(r.total - n(o.advance)), 0) : 0;
     const bad = !o.customer ? 'কাস্টমারের নাম নেই' : !/^01[3-9]\d{8}$/.test(phone) ? 'ফোন নম্বর ঠিক নেই (১১ ডিজিট)' : addr.length < 5 ? 'ঠিকানা নেই' : !r.total ? 'বিলের পরিমাণ ০ — আইটেম বা বিল দিন' : '';
@@ -65,27 +67,35 @@ Object.assign(A, {
     finally { delete A._busy[id]; }
   },
 
-  /* ----- pull delivery statuses ----- */
-  async sfSync() {
-    if (!can('orders_status')) return toast('অনুমতি নেই'); if (!API.ok()) return toast('আগে সেটিংসে কুরিয়ার API সেট করুন');
+  /* ----- pull delivery statuses (button = full report; silent = the automatic run) ----- */
+  async sfSync(silent) {
+    if (A._syncing) return;
+    if (!can('orders_status')) return silent ? 0 : toast('অনুমতি নেই'); if (!API.ok()) return silent ? 0 : toast('আগে সেটিংসে কুরিয়ার API সেট করুন');
     const L = R.onl.map(x => x.o).filter(o => isSF(o) && ['Shipped', 'Return Pending'].includes(o.status)).map(o => ({ o, ref: sfRef(o) }));
     const skipped = L.filter(x => !x.ref).length, T = L.filter(x => x.ref);
-    if (!T.length) return toast(skipped ? 'Steadfast পার্সেলে কনসাইনমেন্ট নম্বর নেই' : 'সিঙ্ক করার মতো Steadfast পার্সেল নেই');
-    toast(`${T.length} টা পার্সেলের স্ট্যাটাস আনা হচ্ছে…`); const res = {};
+    if (!T.length) { localStorage.bb_sf_last = Date.now(); return silent ? 0 : toast(skipped ? 'Steadfast পার্সেলে কনসাইনমেন্ট নম্বর নেই' : 'সিঙ্ক করার মতো Steadfast পার্সেল নেই'); }
+    A._syncing = 1; if (!silent) toast(`${T.length} টা পার্সেলের স্ট্যাটাস আনা হচ্ছে…`); const res = {};
     try { for (let i = 0; i < T.length; i += 40) Object.assign(res, (await API.call('/status', { items: T.slice(i, i + 40).map(x => x.ref) })).results); }
-    catch (e) { return alert('সিঙ্ক হয়নি:\n' + e.message); }
-    const done = [], attn = [], wait = [], fail = [];
+    catch (e) { A._syncing = 0; return silent ? console.warn('auto sync:', e.message) : alert('সিঙ্ক হয়নি:\n' + e.message); }
+    const done = [], attn = [], wait = [], fail = []; let changed = 0, newAttn = 0;
     T.forEach(({ o, ref }) => {
       const r = res[ref.k + ':' + ref.v]; if (!r || !r.ok) return fail.push(`#${o.no} ${o.customer || ''} — ${r ? r.error : 'উত্তর নেই'}`);
-      const ds = r.status, lbl = CST[ds] || ds; let to = null;
+      const ds = r.status, lbl = CST[ds] || ds, before = o.cstatus; let to = null;
       if (ds === 'delivered' && o.status === 'Shipped') to = 'Delivered';
       else if (ds === 'cancelled' && o.status === 'Shipped') to = 'Return Pending';
-      if (to) { done.push(`#${o.no} ${o.customer || ''}: ${STBN[o.status]} → <b>${STBN[to]}</b>`); o.status = to; o.cstatus = ds; save('orders', o, true, `Steadfast সিঙ্ক #${o.no} → ${to}`); return; }
-      if (o.cstatus !== ds) { o.cstatus = ds; save('orders', o, true, `Steadfast স্ট্যাটাস #${o.no}: ${ds}`); }
-      if (['partial_delivered', 'exceptional', 'unknown', 'hold'].includes(ds) || (ds === 'delivered' && o.status !== 'Shipped') || (ds === 'cancelled' && o.status !== 'Shipped')) attn.push(`#${o.no} ${o.customer || ''}: ${lbl}`);
+      if (to) { done.push(`#${o.no} ${o.customer || ''}: ${STBN[o.status]} → <b>${STBN[to]}</b>`); o.status = to; o.cstatus = ds; changed++; save('orders', o, true, `Steadfast সিঙ্ক #${o.no} → ${to}`); return; }
+      if (before !== ds) { o.cstatus = ds; changed++; save('orders', o, true, `Steadfast স্ট্যাটাস #${o.no}: ${ds}`); }
+      if (['partial_delivered', 'exceptional', 'unknown', 'hold'].includes(ds) || (ds === 'delivered' && o.status !== 'Shipped') || (ds === 'cancelled' && o.status !== 'Shipped')) { attn.push(`#${o.no} ${o.customer || ''}: ${lbl}`); if (before !== ds) newAttn++; }
       else wait.push(o);
     });
-    view.lastSync = Date.now(); render();
+    A._syncing = 0; localStorage.bb_sf_last = Date.now(); view.lastSync = Date.now();
+    if (silent) {
+      if (changed) render();
+      if (done.length) toast(`🔄 Steadfast: ${done.length} টা পার্সেল আপডেট হয়েছে` + (done.length <= 2 ? ' — ' + done.join(', ').replace(/<\/?b>/g, '') : ''));
+      else if (newAttn) toast(`⚠ Steadfast: ${newAttn} টা পার্সেলে আপনার দেখা দরকার (কুরিয়ার পেজ → Pending)`);
+      return;
+    }
+    render();
     const li = a => a.map(t => `<div class="li"><span>${t}</span></div>`).join('');
     sheet('Steadfast সিঙ্ক শেষ', `<div class="panel"><b>${done.length}</b> টা বদলেছে · <b>${attn.length}</b> টা আপনার দেখা দরকার · <b>${wait.length}</b> টা অপেক্ষায়${fail.length ? ` · <b class="rd">${fail.length}</b> টা ব্যর্থ` : ''}${skipped ? ` · ${skipped} টায় নম্বর নেই` : ''}</div>` +
       (done.length ? `<h3>✅ আপডেট হয়েছে</h3>${li(done)}` : '') + (attn.length ? `<h3>⚠ নিজে দেখুন</h3>${li(attn)}<p class="note">আংশিক ডেলিভারি, সমস্যা বা হোল্ড হলে আমি স্ট্যাটাস বদলাই না — আপনি দেখে ঠিক করুন।</p>` : '') +

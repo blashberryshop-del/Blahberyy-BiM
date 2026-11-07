@@ -76,32 +76,51 @@ function vHome() {
 }
 
 /* ---------- orders ---------- */
+/* Orders page = orders still to be confirmed (Pending) + cancelled. "কনফার্ম" sends an order to the Courier page (Entry). */
 const NEXT = { Pending: ['Confirmed', 'কনফার্ম'], Confirmed: ['Shipped', 'শিপড'], Shipped: ['Delivered', 'ডেলিভারড'] };
 function orderRows() {
-  const q = (view.oq || '').toLowerCase(), f = view.of || 'all', inr = inR(view.orange || 'all');
-  return R.onl.filter(({ o }) => (f === 'all' || o.status === f) && callMatch(o, view.ocall) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
+  const q = (view.oq || '').toLowerCase().trim(), f = view.of || 'all', inr = inR(view.orange || 'all'), drill = !!(view.osrc || view.odist || view.oloc);
+  const every = !!q || drill;     // a search or a report drill-down looks at every order; otherwise this page only holds orders not yet sent to the Courier page
+  return R.onl.filter(({ o }) => (every || !cStage(o)) && (!drill || f === 'all' || o.status === f) && callMatch(o, view.ocall) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
     (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => (view.ocall === 'sched' || view.ocall === 'later') ? String(a.o.callDate || '').localeCompare(String(b.o.callDate || '')) || n(a.o.no) - n(b.o.no) : n(b.o.no) - n(a.o.no));
 }
+const fdBtn = o => o.phone ? `<button class="qb fd fd-${fraudLevel(o)}" aria-label="ফ্রড চেক" title="ফ্রড চেক" onclick="event.stopPropagation();A.fraud('${o.id}')">${ico('shield', 14)}</button>` : '';
 function orderCard({ o, r }) {
-  const sm = !!view.sel, on = sm && view.sel[o.id], nx = NEXT[o.status], dist = dKey(o), src = normSource(o.source);
-  return `<div class="oc ${on ? 'selc' : ''}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div>` +
-    `<div class="os">${esc(o.phone || '')}${qbs(o.phone)} · ${fmtD(o.date)}</div><div class="os">${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` +
+  const sm = !!view.sel, on = sm && view.sel[o.id], dist = dKey(o), src = normSource(o.source), stg = cStage(o), stt = can('orders_status'), acts = [];
+  const btn = (cls, js, ic, txt) => `<button class="btn sm ${cls}" onclick="event.stopPropagation();${js}">${ico(ic, 14)} ${txt}</button>`;
+  if (!sm && can('orders_view')) {
+    if (o.status === 'Pending') { if (stt) acts.push(btn('', `A.confirm('${o.id}')`, 'check', 'কনফার্ম')); }
+    else if (stg === 'entry') {
+      if (!itemsOk(o)) acts.push(btn('warnb', `A.order('${o.id}')`, 'plus', 'আইটেম দিন'));
+      else {
+        if (canBook(o)) acts.push(btn('', `A.sfBook('${o.id}')`, 'truck', 'Steadfast বুক'));
+        if (stt) acts.push(btn(canBook(o) ? 'ghost' : '', `A.status('${o.id}','Shipped')`, 'truck', canBook(o) ? 'শিপড (হাতে)' : 'শিপড'));
+      }
+    } else if (o.status === 'Shipped' && stt) acts.push(btn('', `A.status('${o.id}','Delivered')`, 'check', 'ডেলিভারড'));
+    acts.push(btn('ghost', `A.labelSheet(['${o.id}'])`, 'printer', 'লেবেল'));
+  }
+  return `<div class="oc ${stg ? 'oc-cur st-' + stg : 'oc-ord'} ${on ? 'selc' : ''}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div>` +
+    `<div class="os">${esc(o.phone || '')}${qbs(o.phone)}${fdBtn(o)} · ${fmtD(o.date)}</div><div class="os">${stg ? `<span class="stg stg-${stg}">${stageName(stg)}</span>` : ''}${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` +
     `<div class="oh"><span><b>${money(r.total)}</b>${r.noItems ? ' <small class="warn">⚠ আইটেম নেই</small>' : ''}</span><span class="${r.cod || r.due > 0 ? 'rd' : 'gr'}">${r.cod ? 'COD ' + money(r.cod) : r.due > 0 ? 'বাকি ' + money(r.due) : r.paid >= r.total && r.total ? '✓ পেইড' : ''}</span></div>` +
-    (!sm && ((nx && can('orders_status')) || can('orders_view')) ? `<div class="oact">${canBook(o) ? `<button class="btn sm" onclick="event.stopPropagation();A.sfBook('${o.id}')">${ico('truck', 14)} Steadfast বুক</button>` : ''}${nx && can('orders_status') ? `<button class="btn sm" onclick="event.stopPropagation();A.status('${o.id}','${nx[0]}')">${ico('check', 14)} ${nx[1]}</button>` : ''}<button class="btn sm ghost" onclick="event.stopPropagation();A.labelSheet(['${o.id}'])">${ico('printer', 14)} লেবেল</button></div>` : '') +
-    (!sm && o.status === 'Pending' && can('orders_status') ? `<div class="ccall">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" title="${CALLS[k][1]}" onclick="event.stopPropagation();A.call('${o.id}','${k}')">${CALLS[k][0]}${o.call === k ? '' : ' <small>' + CALLS[k][1] + '</small>'}</button>`).join('')}</div>` : '') + `</div>`;
+    (acts.length ? `<div class="oact">${acts.join('')}</div>` : '') +
+    (!sm && o.status === 'Pending' && stt ? `<div class="ccall">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" title="${CALLS[k][1]}" onclick="event.stopPropagation();A.call('${o.id}','${k}')">${CALLS[k][0]}${o.call === k ? '' : ' <small>' + CALLS[k][1] + '</small>'}</button>`).join('')}</div>` : '') + `</div>`;
 }
 function orderListHtml() {
   const L = orderRows(), tot = L.length, show = L.slice(0, view.omax || 60); view.visible = show.map(x => x.o.id);
-  return `<div class="muted" style="margin:2px 2px 8px">${tot} টা অর্ডার · মোট ${money(L.reduce((a, x) => a + x.r.total, 0))}</div>` + (show.map(orderCard).join('') || emptyBox('box', 'কোনো অর্ডার নেই')) + (tot > show.length ? `<button class="btn ghost" style="width:100%" onclick="view.omax=(view.omax||60)+60;render()">আরও দেখুন</button>` : '');
+  const wide = (view.oq || '').trim() || view.osrc || view.odist || view.oloc;
+  return `<div class="muted" style="margin:2px 2px 8px">${tot} টা অর্ডার · মোট ${money(L.reduce((a, x) => a + x.r.total, 0))}</div>` +
+    (wide ? `<div class="muted legend"><i class="lg lg-ord"></i>অর্ডার পেজে আছে <i class="lg lg-cur"></i>কুরিয়ার পেজে চলে গেছে</div>` : '') +
+    (show.map(orderCard).join('') || emptyBox('box', 'কোনো অর্ডার নেই')) + (tot > show.length ? `<button class="btn ghost" style="width:100%" onclick="view.omax=(view.omax||60)+60;render()">আরও দেখুন</button>` : '');
 }
 function vOrders() {
-  const f = view.of || 'all', fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'এলাকা: ' + view.oloc], view.orange && view.orange !== 'all' && ['orange', RANGES.find(x => x[0] === view.orange)[1]]].filter(Boolean);
+  const f = view.of || 'all', drill = !!(view.osrc || view.odist || view.oloc), base = R.onl.filter(x => !cStage(x.o));
+  const fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'এলাকা: ' + view.oloc], drill && f !== 'all' && ['of', 'স্ট্যাটাস: ' + (STBN[f] || f)], view.orange && view.orange !== 'all' && ['orange', RANGES.find(x => x[0] === view.orange)[1]]].filter(Boolean);
   const sm = !!view.sel, cnt = sm ? Object.keys(view.sel).length : 0;
+  const callChips = [['', 'সব'], ['todo', '📞 কল বাকি'], ...Object.keys(CALLS).filter(k => k !== 'ok').map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল']];
   return (sm ? `<div class="selbar"><b>${cnt} টা সিলেক্ট</b><button class="btn sm" onclick="A.selLabel()">${ico('printer', 14)} লেবেল</button>${can('orders_status') ? '<button class="btn sm ghost" onclick="A.selStatus()">স্ট্যাটাস</button>' : ''}<button class="btn sm ghost" onclick="A.selAll()">সব</button><button class="btn sm ghost" onclick="A.selMode()">বাতিল</button></div>` : '') +
     head('অনলাইন অর্ডার', `${can('orders_view') ? `<button class="btn sm ghost" onclick="A.selMode()">${ico('check', 14)} সিলেক্ট</button>` : ''}${can('orders_edit') ? `<button class="btn sm" onclick="A.quick()">${ico('bolt', 14)} কুইক</button>` : ''}`) +
     `<input class="search" placeholder="নাম / ফোন / অর্ডার নং / কনসাইনমেন্ট / সোর্স" value="${esc(view.oq || '')}" oninput="view.oq=this.value;A.olist()">` +
-    `<div class="chips sc"><button class="chip ${f === 'all' ? 'on' : ''}" onclick="A.f('of','all')">সব</button>${ST.map(s => `<button class="chip ${f === s ? 'on' : ''}" onclick="A.f('of','${s}')">${STBN[s]} <small>${R.onl.filter(x => x.o.status === s).length}</small></button>`).join('')}</div>` +
-    `<div class="chips sc"><span class="muted" style="align-self:center">কল:</span>${[['', 'সব'], ['todo', '📞 কল বাকি'], ...Object.keys(CALLS).map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল']].map(([k, l]) => { const c = k ? R.onl.filter(x => callMatch(x.o, k)).length : 0; return `<button class="chip ${(view.ocall || '') === k ? 'on' : ''}" onclick="A.f('ocall','${k}')">${l}${k ? ` <small>${c}</small>` : ''}</button>`; }).join('')}</div>` +
+    `<div class="chips sc"><span class="muted" style="align-self:center">কল:</span>${callChips.map(([k, l]) => { const c = k ? base.filter(x => callMatch(x.o, k)).length : base.length; return `<button class="chip ${(view.ocall || '') === k ? 'on' : ''}" onclick="A.f('ocall','${k}')">${l} <small>${c}</small></button>`; }).join('')}</div>` +
     (fl.length ? `<div class="chips">${fl.map(([k, l]) => `<button class="chip on" onclick="view.${k}=null;render()">${esc(l)} ✕</button>`).join('')}</div>` : '') + `<div id="olist">${orderListHtml()}</div>`;
 }
 
@@ -109,15 +128,25 @@ function vOrders() {
 function courierMatches() { const q = (view.cq || '').trim().toLowerCase(); if (!q) return []; return R.onl.filter(({ o }) => [o.tracking, o.phone, o.customer, o.no].join(' ').toLowerCase().includes(q)).slice(0, 8); }
 function cqCard({ o, r }) {
   const q = ['Delivered', 'Return Pending', 'Returned', 'Cancelled', 'Shipped'], ed = can('orders_status');
-  return `<div class="oc" onclick="A.order('${o.id}')"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div><div class="os">${esc(o.phone || '')}${qbs(o.phone)} · ${esc(o.courier || '—')} · ${esc(o.tracking || 'কনসাইনমেন্ট নেই')}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? ' · <b>' + esc(CST[o.cstatus] || o.cstatus) + '</b>' : ''}</div><div class="oh"><span><b>${money(r.total)}</b></span><span class="rd">${r.cod ? 'COD ' + money(r.cod) : ''}</span></div>${ed ? `<div class="chips" onclick="event.stopPropagation()">${q.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="A.status('${o.id}','${s}');view.cq='';render()">${STBN[s]}</button>`).join('')}</div>` : ''}</div>`;
+  return `<div class="oc ${cStage(o) ? 'oc-cur st-' + cStage(o) : 'oc-ord'}" onclick="A.order('${o.id}')"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div><div class="os">${esc(o.phone || '')}${qbs(o.phone)} · ${esc(o.courier || '—')} · ${esc(o.tracking || 'কনসাইনমেন্ট নেই')}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? ' · <b>' + esc(CST[o.cstatus] || o.cstatus) + '</b>' : ''}</div><div class="oh"><span><b>${money(r.total)}</b></span><span class="rd">${r.cod ? 'COD ' + money(r.cod) : ''}</span></div>${ed ? `<div class="chips" onclick="event.stopPropagation()">${q.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="A.status('${o.id}','${s}');view.cq='';render()">${STBN[s]}</button>`).join('')}</div>` : ''}</div>`;
 }
 function renderCourierResults() { const e = $('#cqres'); if (e) e.innerHTML = courierMatches().map(cqCard).join('') || (view.cq ? '<p class="muted">কিছু পাওয়া যায়নি</p>' : ''); if (!view.cq) { const i = $('#cqin'); if (i) { i.value = ''; i.focus(); } } }
+const STAGE_HINT = { entry: 'কনফার্ম হওয়া অর্ডার এখানে আসে। "Steadfast বুক" চাপলে In review-তে যাবে (Pathao/হাতে পাঠালে "শিপড")।', review: 'Steadfast-এ বুক হয়েছে, তারা রিভিউ করছে।', shipped: 'কুরিয়ারের হাতে / পথে (Pathao, হাতে-শিপড, বা Steadfast রিভিউ শেষ)।', pending: 'Steadfast বলছে এখনো ডেলিভারি হয়নি, বা হোল্ড/সমস্যা — নজরে রাখুন।', delivered: 'ডেলিভারি সম্পন্ন।', rto: 'পার্সেল ফেরত আসছে — হাতে পেলে "রিটার্নড" করুন।', returned: 'ফেরত এসেছে (স্টক ফিরেছে)।' };
+function courierRows() {
+  const st = view.cst || 'entry', fc = view.cf || 'all';
+  const desc = st === 'all' || st === 'delivered' || st === 'returned';
+  return R.onl.filter(({ o }) => { const g = cStage(o); return g && (st === 'all' || g === st) && (fc === 'all' || o.courier === fc); }).sort((a, b) => desc ? n(b.o.no) - n(a.o.no) : n(a.o.no) - n(b.o.no));
+}
 function vCourier() {
-  const s = snap(R), cs = Object.values(s.couriers), fc = view.cf || 'all';
-  const tr = R.onl.filter(({ o }) => (o.status === 'Shipped' || o.status === 'Return Pending') && (fc === 'all' || o.courier === fc)).sort((a, b) => n(a.o.no) - n(b.o.no));
-  return head('কুরিয়ার', can('orders_status') ? `${API.ok() ? `<button class="btn sm" onclick="A.sfSync()">${ico('check', 14)} Steadfast সিঙ্ক</button>` : ''}<button class="btn sm ghost" onclick="A.bulk()">${ico('list', 14)} একসাথে</button>${can('orders_edit') && can('cash_edit') ? `<button class="btn sm ghost" onclick="A.stmt()">${ico('receipt', 14)} স্টেটমেন্ট</button>` : ''}` : '') +
+  const s = snap(R), cs = Object.values(s.couriers), fc = view.cf || 'all', st = view.cst || 'entry';
+  const base = R.onl.filter(({ o }) => cStage(o) && (fc === 'all' || o.courier === fc)), cnt = k => base.filter(x => k === 'all' || cStage(x.o) === k).length;
+  const L = courierRows(), show = L.slice(0, view.cmax || 60), ls = +localStorage.bb_sf_last || 0, ago = ls ? Math.max(0, Math.round((Date.now() - ls) / 60000)) : -1;
+  const sfNote = !can('orders_status') ? '' : API.ok() ? `<div class="muted" style="margin:6px 2px">🔄 Steadfast-এর স্ট্যাটাস নিজে নিজেই আপডেট হয় (অ্যাপ খোলা থাকলে ৫ মিনিট পরপর)${ago >= 0 ? ` · সর্বশেষ: ${ago ? ago + ' মিনিট আগে' : 'এইমাত্র'}` : ''}</div>` : `<div class="muted" style="margin:6px 2px">⚠ এই ডিভাইসে কুরিয়ার API সেট নেই — সেটিংসে Worker URL ও টোকেন দিলে Steadfast-এর স্ট্যাটাস নিজে নিজে আপডেট হবে।</div>`;
+  return head('কুরিয়ার', can('orders_status') ? `${API.ok() ? `<button class="btn sm" onclick="A.sfSync()">${ico('check', 14)} Steadfast সিঙ্ক</button>` : ''}<button class="btn sm ghost" onclick="A.bulk()">${ico('list', 14)} একসাথে</button>${can('orders_edit') && can('cash_edit') ? `<button class="btn sm ghost" onclick="A.stmt()">${ico('receipt', 14)} স্টেটমেন্ট</button>` : ''}` : '') + sfNote +
     `<div class="scanrow"><input id="cqin" class="search" placeholder="কনসাইনমেন্ট নং / ফোন লিখুন বা স্ক্যান করুন" oninput="A.cq(this.value)" value="${esc(view.cq || '')}"><button class="btn" onclick="A.scan()" aria-label="স্ক্যান">${ico('scan', 20)}</button></div><div id="cqres">${courierMatches().map(cqCard).join('')}</div>` +
-    `<h3>এখন কুরিয়ারে (${tr.length})</h3><div class="chips sc"><button class="chip ${fc === 'all' ? 'on' : ''}" onclick="A.f('cf','all')">সব</button>${cfg().couriers.map(c => `<button class="chip ${fc === c ? 'on' : ''}" onclick="A.f('cf','${esc(c)}')">${esc(c)}</button>`).join('')}</div>` + (tr.map(cqCard).join('') || emptyBox('truck', 'কুরিয়ারে কোনো পার্সেল নেই')) +
+    `<div class="chips sc stgrow">${[['all', 'সব'], ...CSTAGES].map(([k, l]) => `<button class="chip ${st === k ? 'on' : ''}" onclick="A.f('cst','${k}')">${k !== 'all' ? `<i class="cd" style="background:${STAGE_COLOR[k]}"></i>` : ''}${l} <small>${cnt(k)}</small></button>`).join('')}</div>` +
+    `<div class="chips sc"><span class="muted" style="align-self:center">কুরিয়ার:</span><button class="chip ${fc === 'all' ? 'on' : ''}" onclick="A.f('cf','all')">সব</button>${cfg().couriers.map(c => `<button class="chip ${fc === c ? 'on' : ''}" onclick="A.f('cf','${esc(c)}')">${esc(c)}</button>`).join('')}</div>` +
+    `<h3>${st === 'all' ? 'সব' : stageName(st)} (${L.length})</h3>${STAGE_HINT[st] ? `<div class="muted" style="margin:-4px 2px 8px">${STAGE_HINT[st]}</div>` : ''}` + (show.map(orderCard).join('') || emptyBox('truck', 'এই ফিল্টারে কোনো অর্ডার নেই')) + (L.length > show.length ? `<button class="btn ghost" style="width:100%" onclick="view.cmax=(view.cmax||60)+60;render()">আরও দেখুন</button>` : '') +
     `<h3>কুরিয়ার সামারি</h3>${cs.map(c => `<div class="panel"><div class="oh"><b>${esc(c.name)}</b>${can('cash_view') ? `<button class="btn sm ghost" onclick="A.payHist('${esc(c.name)}')">ইতিহাস</button>` : ''}${can('cash_edit') ? `<button class="btn sm ghost" onclick="A.payCourier('${esc(c.name)}')">টাকা পেলাম</button>` : ''}</div><div class="os">পাঠানো ${c.sent} · পথে ${c.transit} · ডেলিভারড ${c.delivered} · রিটার্ন ${c.returned} (${c.sent ? Math.round(c.returned / c.sent * 100) : 0}%)</div>${can('cash_view') ? `<div class="pr"><span>প্রত্যাশিত সেটেলমেন্ট</span><b>${money(c.settle)}</b></div><div class="pr"><span>পাওনা (এখনো আসেনি)</span><b class="rd">${money(c.codDue)}</b></div>` : ''}${can('costs_view') ? `<div class="pr"><span>কুরিয়ার চার্জ (মোট)</span><b>${money(c.charge)}</b></div><div class="pr"><span>COD চার্জ</span><b>${money(c.codFee)}</b></div>${c.retRec ? `<div class="pr"><span>রিটার্নে পাওয়া চার্জ</span><b>${money(c.retRec)}</b></div>` : ''}${c.fees ? `<div class="pr"><span>আলাদা ফি</span><b>${money(c.fees)}</b></div>` : ''}` : ''}</div>`).join('') || ''}`;
 }
 
@@ -258,7 +287,7 @@ function render() {
   const canAdd = ['orders_edit', 'sales_edit', 'purchases_edit', 'expenses_edit', 'damages_edit', 'cash_edit'].some(can) || can('orders_view');
   fab.classList.toggle('hide', !canAdd || v === 'chat'); fab.innerHTML = ico('plus', 28);
   el.scrollTop = lastView === v ? st : 0; const was = lastView; lastView = v; setSync(SY.st);
-  chatDock(v === 'chat' && !!cloudCfg(), was !== 'chat'); chatBadge();
+  chatDock(v === 'chat' && !!cloudCfg(), was !== 'chat'); chatBadge(); if (v === 'courier') setTimeout(() => sfAutoTick(60000), 400);
 }
 window.render = render;
 window.addEventListener('hashchange', () => { view.sup = null; view.sel = null; render(); });

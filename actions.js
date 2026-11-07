@@ -6,12 +6,14 @@ const A = {
   dialIn(k) { const e = document.querySelector('#sheet [data-k=' + k + ']'); A.dial(e && e.value); },
   nav(v) { location.hash = v; },
   pick(inp, mode) {
-    const row = inp.parentNode, p = row.querySelector('.p'); if (!p || p.value) return;
+    const row = inp.parentNode, p = row.querySelector('.p'), q = row.querySelector('.q');
+    if (mode === 'sell' && q && !q.value && (R.prod[inp.value.trim()] || Object.values(R.combos || {}).some(c => c.code === inp.value.trim()))) q.value = 1;   // picking an item = 1 piece; change it if more
+    if (!p || p.value) return;
     const c = inp.value.trim(); const price = mode === 'cost' ? (R.prod[c] ? R.prod[c].avg : '') : R.sellPrice(c);
     if (price) p.value = Math.round(price);
   },
   addLine(mode, ret) { $('#lines').insertAdjacentHTML('beforeend', lineRow({}, mode, ret)); },
-  f(k, v) { view[k] = v; render(); },
+  f(k, v) { view[k] = v; if (k === 'cst' || k === 'cf') view.cmax = 0; render(); },
   tab(k, v) { view[k] = v; render(); },
   range(r) { view.range = r; render(); },
   theme(v, el) { localStorage.bb_theme = v; applyTheme(); el.parentNode.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); },
@@ -26,14 +28,16 @@ const A = {
   /* ---------- orders ---------- */
   status(id, st, quiet) {
     const o = S.orders[id]; if (!o || o.status === st) return; if (!can('orders_status')) return toast('স্ট্যাটাস বদলের অনুমতি নেই');
+    if ((st === 'Confirmed' || st === 'Shipped') && !itemsOk(o)) return A.needItems(o);   // no items = it cannot go to the courier page
     const prev = o.status, prevCT = o.cancelType; o.status = st;
     if (st === 'Cancelled' && !o.cancelType) o.cancelType = (o.tracking || o.cid) ? 'courier' : 'call';   // cancelled after it went to the courier vs at the confirmation call
     save('orders', o, quiet, `অর্ডার #${o.no} → ${st}`);
-    toast(`#${o.no} → ${STBN[st]}`, () => { o.status = prev; o.cancelType = prevCT || ''; save('orders', o, false, `অর্ডার #${o.no} → ${prev} (Undo)`); });
+    toast(`#${o.no} → ${STBN[st]}${st === 'Confirmed' ? ' (কুরিয়ার পেজে Entry)' : ''}`, () => { o.status = prev; o.cancelType = prevCT || ''; save('orders', o, false, `অর্ডার #${o.no} → ${prev} (Undo)`); });
   },
   /* ---------- confirmation call result ---------- */
   call(id, k) {
     const o = S.orders[id]; if (!o) return; if (!can('orders_status')) return toast('কল-অবস্থা বদলের অনুমতি নেই');
+    if (k === 'ok' && o.status === 'Pending' && !itemsOk(o)) return A.needItems(o, true);
     if (k === 'sched' || k === 'later') return A.callSheet(id, k);
     if (k === 'cancel' && !confirm(`#${o.no} ${o.customer || ''} — কাস্টমার ক্যানসেল চেয়েছে?\nঅর্ডার ক্যানসেল হয়ে যাবে (স্টক ফিরে আসবে)।`)) return;
     A.callSet(id, k, {});
@@ -45,7 +49,7 @@ const A = {
     if (k === 'ok' && o.status === 'Pending') o.status = 'Confirmed';
     if (k === 'cancel') { o.status = 'Cancelled'; o.cancelType = 'call'; }
     save('orders', o, false, `অর্ডার #${o.no} কল: ${CALLS[k][1]}`);
-    toast(`#${o.no} ${CALLS[k][0]} ${CALLS[k][1]}${o.status !== prev.status ? ' → ' + STBN[o.status] : ''}`, () => { Object.assign(o, prev); save('orders', o, false, `অর্ডার #${o.no} কল Undo`); });
+    toast(`#${o.no} ${CALLS[k][0]} ${CALLS[k][1]}${o.status !== prev.status ? ' → ' + STBN[o.status] + (o.status === 'Confirmed' ? ' · কুরিয়ার পেজে Entry-তে গেছে' : '') : ''}`, () => { Object.assign(o, prev); save('orders', o, false, `অর্ডার #${o.no} কল Undo`); });
   },
   callSheet(id, k) {
     const o = S.orders[id]; if (!o) return;
@@ -59,11 +63,11 @@ const A = {
     const o = id ? S.orders[id] : Object.assign({ date: today(), status: 'Pending', pay: 'Cash on Delivery', items: [] }, pre || {});
     const ed = can('orders_edit'), dis = ed ? '' : 'disabled', cs = ['', ...cfg().couriers];
     if (!id && !ed) return toast('অর্ডার যোগের অনুমতি নেই');
-    const body = (id && can('orders_status') ? `<div class="chips">${ST.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="A.status('${id}','${s}');closeSheet()">${STBN[s]}</button>`).join('')}</div>` : '') +
+    const body = (id && can('orders_status') ? `<div class="chips">${ST.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="if(A.status('${id}','${s}')!==false)closeSheet()">${STBN[s]}</button>`).join('')}</div>` : '') +
       (id && can('orders_status') ? `<div class="lbl">📞 কনফার্মেশন কলের ফলাফল</div><div class="chips">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" onclick="closeSheet();A.call('${id}','${k}')">${CALLS[k][0]} ${CALLS[k][1]}</button>`).join('')}</div>${o.call ? `<div class="os">${callLine(o)}</div>` : ''}` : '') +
       (id ? `<div class="btnrow" style="margin:4px 0 8px"><button class="btn ghost sm" onclick="A.forward('${id}')">${ico('up', 14)} টিম গ্রুপে পাঠান</button><button class="btn ghost sm" onclick="A.thread('${id}')">💬 এই অর্ডার নিয়ে আলোচনা${typeof chatCount === 'function' && chatCount(id) ? ' (' + chatCount(id) + ')' : ''}</button></div>` : '') +
-      fld('date', 'তারিখ', 'date', o.date, 0, dis) + fld('customer', 'কাস্টমার', 'text', o.customer, 0, dis) + fld('phone', 'ফোন', 'tel', o.phone, 0, dis) + `<div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn sm" onclick="A.dialIn('phone')">${ico('phone', 14)} কল করুন</button><button type="button" class="btn ghost sm" onclick="A.cpIn('phone','নম্বর')">${ico('copy', 14)} নম্বর কপি</button></div>` + fld('address', 'ঠিকানা', 'textarea', o.address, 0, dis) +
-      `<div class="row2">${fld('source', 'সোর্স (FB/TikTok…)', 'text', o.source, 0, `list="srcs" ${dis}`)}${fld('area', 'জেলা/এলাকা (খালি = ঠিকানা থেকে)', 'text', o.area, 0, dis)}</div><datalist id="srcs">${SOURCES.map(s => `<option value="${s}">`).join('')}</datalist>` +
+      fld('date', 'তারিখ', 'date', o.date, 0, dis) + fld('customer', 'কাস্টমার', 'text', o.customer, 0, dis) + fld('phone', 'ফোন', 'tel', o.phone, 0, dis) + `<div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn sm" onclick="A.dialIn('phone')">${ico('phone', 14)} কল করুন</button><button type="button" class="btn ghost sm" onclick="A.cpIn('phone','নম্বর')">${ico('copy', 14)} নম্বর কপি</button>${id ? `<button type="button" class="btn ghost sm" onclick="A.fraud('${id}')">${ico('shield', 14)} ফ্রড চেক</button>` : ''}</div>` + fld('address', 'ঠিকানা', 'textarea', o.address, 0, `${dis} oninput="A.autoArea()"`) +
+      `<div class="row2">${fld('source', 'সোর্স', 'select', normSource(o.source), srcOpts(o.source), dis)}${fld('area', 'জেলা (ঠিকানা থেকে অটো বসে)', 'text', o.area || areaOf(o.address).district, 0, `${dis} data-man="${o.area && o.area !== areaOf(o.address).district ? 1 : 0}" oninput="this.dataset.man=1"`)}</div>` +
       fld('note', 'নোট', 'text', o.note, 0, dis) + (ed ? linesEditor(o.items, 'sell', true) : `<div class="lbl">আইটেম</div><div class="os">${(o.items || []).map(i => esc(i.code) + '×' + i.qty).join(', ') || '—'}</div>`) +
       `<div class="row2">${fld('delivery', 'ডেলিভারি চার্জ', 'number', o.delivery, 0, dis)}${fld('discount', 'ডিসকাউন্ট', 'number', o.discount, 0, dis)}</div>` +
       fld('bill', 'বিল (আইটেম না দিলে এই টাকাই ধরা হবে)', 'number', o.bill, 0, dis) +
@@ -76,21 +80,22 @@ const A = {
       (id ? `<div class="btnrow">${canBook(o) ? `<button class="btn sm" onclick="A.sfBook('${id}')">${ico('truck', 16)} Steadfast-এ বুক (সেভ করা তথ্য দিয়ে)</button>` : ''}<button class="btn ghost sm" onclick="A.labelSheet(['${id}'])">${ico('printer', 16)} লেবেল প্রিন্ট</button>${ed && can('delete') ? `<button class="btn red sm" onclick="A.del('orders','${id}',1)">ডিলিট</button>` : ''}</div>` : '');
     sheet(id ? `অর্ডার #${o.no}` : 'নতুন অর্ডার', body, ed ? d => {
       const v = vals(d); if (!v.customer && !v.phone) { toast('নাম বা ফোন দিন'); return false; }
+      const its = readLines(d); if ((v.status === 'Confirmed' || v.status === 'Shipped') && v.status !== o.status && !its.length) { toast('⚠ আইটেম ও পরিমাণ না দিলে "' + STBN[v.status] + '" করা যাবে না'); return false; }
       if (!id && v.phone && live(S, 'orders').some(x => x.phone === v.phone && x.date === v.date && x.status !== 'Cancelled') && !confirm(`এই নম্বরে (${v.phone}) একই তারিখে আগেই অর্ডার আছে।\nতবুও সেভ করবেন?`)) return false;
-      v.source = normSource(v.source); if (v.status === 'Cancelled' && !v.cancelType && !o.cancelType) v.cancelType = (v.tracking || o.tracking) ? 'courier' : 'call'; Object.assign(o, v, { items: readLines(d), no: o.no || nextNo() }); save('orders', o);
+      v.source = normSource(v.source); if (v.status === 'Cancelled' && !v.cancelType && !o.cancelType) v.cancelType = (v.tracking || o.tracking) ? 'courier' : 'call'; Object.assign(o, v, { items: its, no: o.no || nextNo() }); save('orders', o);
     } : null);
   },
   quick(text) {
     const body = `<button class="btn ghost sm" onclick="A.clip()">${ico('list', 16)} ক্লিপবোর্ড থেকে নিন</button>${fld('t', 'কাস্টমারের মেসেজ paste করুন', 'textarea', text || '')}<div id="qprev"></div>`;
     const mk = d => {
       const v = vals(d.querySelector('#qprev')); if (!v.name && !v.phone) { toast('আগে মেসেজ paste করুন'); return false; }
-      const o = { date: today(), status: 'Pending', pay: 'Cash on Delivery', customer: v.name, phone: v.phone, address: v.address, bill: v.bill, source: normSource(v.source), note: v.note, items: [], no: nextNo() };
+      const o = { date: today(), status: 'Pending', pay: 'Cash on Delivery', customer: v.name, phone: v.phone, address: v.address, bill: v.bill, source: normSource(v.source), area: areaOf(v.address).district || '', note: v.note, items: [], no: nextNo() };
       if (v.phone && live(S, 'orders').some(x => x.phone === v.phone && x.date === o.date && x.status !== 'Cancelled') && !confirm(`এই নম্বরে (${v.phone}) আজকেই আরেকটা অর্ডার আছে।\nতবুও সেভ করবেন?`)) return false;
       save('orders', o); toast(`✓ অর্ডার #${o.no} যোগ হলো`); return o;
     };
     const d = sheet('⚡ কুইক অর্ডার', body, d => { if (!mk(d)) return false; }, 'অর্ডার সেভ', { label: 'সেভ + আইটেম দিন', fn: d => { const o = mk(d); if (!o) return false; setTimeout(() => A.order(o.id), 50); } });
     const ta = d.querySelector('[data-k=t]'), prev = d.querySelector('#qprev');
-    const upd = () => { const p = parseOrder(ta.value); prev.innerHTML = ta.value.trim() ? fld('name', 'নাম', 'text', p.name) + fld('phone', 'ফোন', 'tel', p.phone) + fld('address', 'ঠিকানা', 'text', p.address) + `<div class="row2">${fld('bill', 'বিল', 'number', p.bill || '')}${fld('source', 'সোর্স', 'text', p.source, 0, 'list="srcs"')}</div>${fld('note', 'নোট', 'text', p.note)}<datalist id="srcs">${SOURCES.map(s => `<option value="${s}">`).join('')}</datalist>` : ''; };
+    const upd = () => { const p = parseOrder(ta.value); prev.innerHTML = ta.value.trim() ? fld('name', 'নাম', 'text', p.name) + fld('phone', 'ফোন', 'tel', p.phone) + fld('address', 'ঠিকানা', 'text', p.address) + `<div class="row2">${fld('bill', 'বিল', 'number', p.bill || '')}${fld('source', 'সোর্স', 'select', p.source, srcOpts(p.source))}</div>${fld('note', 'নোট', 'text', p.note)}` : ''; };
     ta.oninput = upd; upd();
   },
   async clip() { try { const t = await navigator.clipboard.readText(); const ta = $('#sheet [data-k=t]'); ta.value = t; ta.oninput(); } catch (e) { toast('ক্লিপবোর্ড অনুমতি দিন বা হাতে paste করুন'); } },
@@ -104,7 +109,7 @@ const A = {
     const ids = Object.keys(view.sel || {}); if (!ids.length) return toast('অর্ডার সিলেক্ট করুন'); if (!can('orders_status')) return toast('অনুমতি নেই');
     sheet(`${ids.length} টা অর্ডারের স্ট্যাটাস`, `<div class="chips">${ST.map(s => `<button class="chip" onclick="A.selStatusDo('${s}')">${STBN[s]}</button>`).join('')}</div>`);
   },
-  selStatusDo(st) { Object.keys(view.sel || {}).forEach(id => { const o = S.orders[id]; if (o && o.status !== st) { o.status = st; save('orders', o, true, `অর্ডার #${o.no} → ${st}`); } }); toast(`✓ ${Object.keys(view.sel).length} টা → ${STBN[st]}`); view.sel = null; closeSheet(); render(); },
+  selStatusDo(st) { let skip = 0; Object.keys(view.sel || {}).forEach(id => { const o = S.orders[id]; if (o && o.status !== st && (st === 'Confirmed' || st === 'Shipped') && !itemsOk(o)) { skip++; return; } if (o && o.status !== st) { o.status = st; save('orders', o, true, `অর্ডার #${o.no} → ${st}`); } }); toast(`✓ ${Object.keys(view.sel).length - skip} টা → ${STBN[st]}${skip ? ` · ${skip} টায় আইটেম নেই, বাদ গেছে` : ''}`); view.sel = null; closeSheet(); render(); },
 
   /* ---------- courier ---------- */
   cq(q) { view.cq = q; renderCourierResults(); },
@@ -293,9 +298,12 @@ const A = {
   rep(r) { view.rrange = r; render(); },
   rtab(t) { view.rtab = t; render(); },
   repGo(kind, key, st) {
-    view.osrc = view.odist = view.oloc = null; view.of = st || 'all'; view.oq = '';
+    view.osrc = view.odist = view.oloc = null; view.oq = '';
     if (kind === 'src') view.osrc = key; else if (kind === 'dist') view.odist = key; else if (kind === 'loc') view.oloc = key;
-    view.orange = view.rrange || 'month'; A.nav('orders');
+    if (kind) { view.of = st || 'all'; view.orange = view.rrange || 'month'; return A.nav('orders'); }       // report drill-down: all orders of that source/district
+    view.of = 'all'; view.orange = view.rrange || 'month';
+    if (st && STAGE_OF[st]) { view.cst = STAGE_OF[st]; view.cf = 'all'; return A.nav('courier'); }           // confirmed/shipped/delivered/returned live on the Courier page
+    A.nav('orders');
   },
   repCsv() {
     const P = view.rpt; if (!P) return; const rows = [['Group', 'Orders', 'Delivered', 'Returned', 'Cancelled', 'Active', 'Success %', 'Value', 'Delivered Value']];
@@ -338,10 +346,13 @@ const A = {
       `<hr><div class="lbl"><b>☁️ ক্লাউড সিঙ্ক (Firebase)</b> — ${who}</div>${fld('fbcfg', 'firebaseConfig অথবা স্টাফ সেটআপ কোড (BB1:…)', 'textarea', f.raw || '')}${fld('fbshop', 'শপ কোড (যেমন blashberry)', 'text', f.shop || '')}${fld('fbemail', 'ইমেইল', 'email', f.email || '')}${fld('fbpass', 'পাসওয়ার্ড (শুধু প্রথম লগইনের সময়, ফোনে জমা থাকে না)', 'password', '')}` +
       `<div class="btnrow">${own && f.config ? `<button class="btn ghost sm" onclick="A.copyCode()">স্টাফের জন্য সেটআপ কোড কপি</button>` : ''}${f.config ? `<button class="btn ghost sm" onclick="A.logout()">লগআউট</button>` : ''}</div>` +
       `<hr><div class="lbl"><b>🚚 Steadfast API</b> — বুকিং ও স্ট্যাটাস সিঙ্ক (সেটআপ গাইড দেখুন)</div>${fld('apiurl', 'Worker URL (https://….workers.dev)', 'url', (API.cfg || {}).url || '')}${fld('apitok', 'অ্যাপ টোকেন (এই ফোনেই থাকে, ক্লাউডে যায় না)', 'password', (API.cfg || {}).token || '')}<div class="btnrow">${own ? `<button class="btn ghost sm" onclick="A.apiGen()">টোকেন বানান</button>` : ''}<button class="btn ghost sm" onclick="A.apiTest()">সংযোগ পরীক্ষা</button></div>` +
+      `<hr><div class="lbl"><b>🔔 নোটিফিকেশন ও সব-দোকানের ফ্রড চেক</b> — টিমের জন্য (সেটআপ গাইড দেখুন)</div>` +
+      (own ? `${fld('teamurl', 'Worker URL (খালি রাখলে উপরের Steadfast-এর URL ধরবে)', 'url', (D.settings.main || {}).teamUrl || '')}${fld('teamtok', 'টিম টোকেন (সেভ করলে স্টাফের ফোনেও নিজে চলে যায়)', 'text', (D.settings.main || {}).teamToken || '')}<div class="btnrow"><button class="btn ghost sm" onclick="A.teamGen()">টোকেন বানান</button><button class="btn ghost sm" onclick="A.vapidGen()">🔑 নোটিফিকেশন কী বানান</button></div>` : '') +
+      `<div class="os" id="pushst" style="margin-top:8px">${A.pushStatus()}</div><div class="btnrow"><button class="btn sm" onclick="A.pushOn()">🔔 এই ডিভাইসে চালু করুন</button><button class="btn ghost sm" onclick="A.pushTest()">টেস্ট</button><button class="btn ghost sm" onclick="A.pushOff()">বন্ধ করুন</button></div>` +
       (own ? `<hr><div class="btnrow"><button class="btn ghost sm" onclick="A.backup()">⬇ ব্যাকআপ (JSON)</button><button class="btn ghost sm" onclick="$('#rf').click()">⬆ রিস্টোর</button><button class="btn ghost sm" onclick="A.csv()">⬇ Excel/CSV</button></div><input id="rf" type="file" accept=".json" hidden onchange="A.restore(this)">` : ''), d => {
         const v = vals(d);
         if (v.apiurl || v.apitok) { if (v.apiurl && !/^https:\/\//.test(v.apiurl)) { toast('Worker URL অবশ্যই https:// দিয়ে শুরু হতে হবে'); return false; } localStorage.bb_api = JSON.stringify({ url: v.apiurl.trim(), token: v.apitok.trim() }); } else localStorage.removeItem('bb_api');
-        if (own) { const m = Object.assign({ id: 'main' }, D.settings.main, { shop: v.shop || 'BlashBerry', rooms: [v.room1 || 'সাধারণ', v.room2 || 'কনফার্মেশন'], chatDays: Math.min(60, Math.max(3, Math.round(n(v.chatDays)) || 10)), couriers: v.couriers.split(',').map(s => s.trim()).filter(Boolean), cod: Object.fromEntries(c.couriers.map((nm, i) => [nm, { pct: v['codp' + i] === '' ? 0 : v['codp' + i], base: v['codb' + i] || 'full' }])) }); if (v.openCash !== undefined) m.openCash = v.openCash; save('settings', m, true); }
+        if (own) { const m = Object.assign({ id: 'main' }, D.settings.main, { shop: v.shop || 'BlashBerry', rooms: [v.room1 || 'সাধারণ', v.room2 || 'কনফার্মেশন'], chatDays: Math.min(60, Math.max(3, Math.round(n(v.chatDays)) || 10)), teamUrl: (v.teamurl || '').trim(), teamToken: (v.teamtok || '').trim(), couriers: v.couriers.split(',').map(s => s.trim()).filter(Boolean), cod: Object.fromEntries(c.couriers.map((nm, i) => [nm, { pct: v['codp' + i] === '' ? 0 : v['codp' + i], base: v['codb' + i] || 'full' }])) }); if (v.openCash !== undefined) m.openCash = v.openCash; save('settings', m, true); }
         const old = cloudCfg() || {};
         if (v.fbcfg) {
           try {

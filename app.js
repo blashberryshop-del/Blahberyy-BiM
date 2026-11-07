@@ -16,12 +16,14 @@ const PAY = ['Cash', 'bKash', 'Nagad', 'Rocket', 'Bank', 'Card'], PAY_O = ['Cash
 const CATS = ['Makeup', 'Skin Care', 'Hair Care', 'Body Care', 'Fragrance', 'Nail', 'Accessories', 'Other'];
 const EXP = ['Staff Salary', 'Office Rent', 'Office Expense', 'Transport', 'Phone Bill', 'Electricity Bill', 'Internet Bill', 'Courier', 'Packaging', 'Marketing / Ads', 'Personal Expense (Owner)', 'Other'];
 const DMG = ['Damaged', 'Expired', 'Lost', 'Used as Sample', 'Customer Return - Damaged', 'Other'];
-const SOURCES = ['Facebook', 'TikTok', 'Inbox', 'WhatsApp', 'Instagram', 'Website', 'Phone Call', 'Offline/Shop', 'YouTube', 'Referral'];
+const SOURCES = ['Page', 'TikTok', 'WhatsApp', 'Imo', 'Instagram'];
+const srcOpts = cur => { const c = normSource(cur); return [['', '— বাছুন —'], ...SOURCES.map(x => [x, x]), ...(c && !SOURCES.includes(c) ? [[c, c]] : [])]; };
 const BADGE = { Pending: 'b-gray', Confirmed: 'b-blue', Shipped: 'b-amber', Delivered: 'b-green', Cancelled: 'b-red', 'Return Pending': 'b-orange', Returned: 'b-red' };
 const STBN = { Pending: 'পেন্ডিং', Confirmed: 'কনফার্ম', Shipped: 'শিপড', Delivered: 'ডেলিভারড', Cancelled: 'ক্যানসেল', 'Return Pending': 'রিটার্ন পেন্ডিং', Returned: 'রিটার্নড' };
 
 /* ---------- icons ---------- */
 const IC = {
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>', copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
   home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>', box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v9"/>',
   truck: '<path d="M1 6h13v10H1z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>', chart: '<path d="M5 20V10M12 20V4M19 20v-8"/>',
@@ -71,6 +73,7 @@ function save(coll, rec, quiet, logText) {
   const isNew = !S[base][rec.id];
   parts.forEach(p => { if ((p.perm && !can(p.perm)) || !canW(p.coll)) return; put(p.coll, p.rec); });
   logAct(logText || `${COLN[coll] || coll} ${isNew ? 'যোগ' : 'এডিট'}: ${recLabel(coll, rec)}`);
+  if (base === 'orders' && isNew && !quiet && typeof pushOrder === 'function') pushOrder(rec);   // tell the team about a brand-new order
   if (!quiet) render(); return rec;
 }
 function remove(coll, id) {
@@ -161,6 +164,7 @@ async function syncStart() {
     SY.uid = u.uid; SY.shop = c.shop; SY.db = fsDb(); SY.err = '';
     await loadProfile(c); if (!profile) { SY.db = null; setSync('err', 'অ্যাক্সেস নেই'); render(); return; }
     subscribeAll(); setSync('on'); render();
+    if (typeof pushSync === 'function') pushSync();
   } catch (e) {
     setSync('err', authMsg(e));
     if (/^auth\//.test(e.code || '') && !/network|internal/.test(e.code)) { SY.err = authMsg(e); setProfile(null); render(); } else toast('সিঙ্ক ত্রুটি: ' + authMsg(e));

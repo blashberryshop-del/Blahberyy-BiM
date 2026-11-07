@@ -171,6 +171,14 @@ service cloud.firestore {
         allow delete: if isOwner(shop) || ((can(shop, 'orders_view')) && request.time.toMillis() - resource.data.t > 259200000);
       }
 
+      match /pushSubs/{id} {
+        allow read: if can(shop, 'orders_view');
+        // a device registers itself; any teammate's sender may remove dead (expired) registrations
+        allow create: if (can(shop, 'orders_view')) && request.resource.data.uid == request.auth.uid;
+        allow update: if (can(shop, 'orders_view')) && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+        allow delete: if isOwner(shop) || (can(shop, 'orders_view'));
+      }
+
       match /settings/{id} {
         allow read: if isStaff(shop);
         allow create, update: if isOwner(shop);
