@@ -109,7 +109,7 @@ function chatDock(on, fresh) {
     d.innerHTML = `<div id="mnpop" class="mnpop hide"></div><div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><button class="btn ghost sm" onclick="A.imgPick('')" title="ছবি পাঠান">📷</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value;A.typing(this)" onclick="mentionCheck(this)">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div>`;
   }
   rosterSync(); d.classList.remove('hide'); const ci = $('#chin'); if (fresh && ci) autosize0(ci); d.style.bottom = navH() + 'px';
-  if (m) m.style.paddingBottom = (d.offsetHeight + 16) + 'px';
+  if (m) m.style.paddingBottom = (d.offsetHeight + navH() + 16) + 'px';
   if (fresh) { markSeen(curRoom()); scrollEnd(); setTimeout(scrollEnd, 120); }
 }
 const autosize0 = el => { const cap = Math.max(90, Math.min(220, Math.round(innerHeight * 0.38))); el.style.height = 'auto'; const h = el.scrollHeight + 2; el.style.height = Math.min(h, cap) + 'px'; el.style.overflowY = h > cap ? 'auto' : 'hidden'; };
