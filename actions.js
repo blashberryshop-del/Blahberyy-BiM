@@ -349,7 +349,7 @@ const A = {
       `<hr><div class="lbl"><b>🔔 নোটিফিকেশন ও সব-দোকানের ফ্রড চেক</b> — টিমের জন্য (সেটআপ গাইড দেখুন)</div>` +
       (own ? `${fld('teamurl', 'Worker URL (খালি রাখলে উপরের Steadfast-এর URL ধরবে)', 'url', (D.settings.main || {}).teamUrl || '')}${fld('teamtok', 'টিম টোকেন (সেভ করলে স্টাফের ফোনেও নিজে চলে যায়)', 'text', (D.settings.main || {}).teamToken || '')}<div class="btnrow"><button class="btn ghost sm" onclick="A.teamGen()">টোকেন বানান</button><button class="btn ghost sm" onclick="A.vapidGen()">🔑 নোটিফিকেশন কী বানান</button></div>` : '') +
       `<div class="os" id="pushst" style="margin-top:8px">${A.pushStatus()}</div><div class="btnrow"><button class="btn sm" onclick="A.pushOn()">🔔 এই ডিভাইসে চালু করুন</button><button class="btn ghost sm" onclick="A.pushTest()">টেস্ট</button><button class="btn ghost sm" onclick="A.pushOff()">বন্ধ করুন</button></div>` +
-      (own ? `<hr><div class="btnrow"><button class="btn ghost sm" onclick="A.backup()">⬇ ব্যাকআপ (JSON)</button><button class="btn ghost sm" onclick="$('#rf').click()">⬆ রিস্টোর</button><button class="btn ghost sm" onclick="A.csv()">⬇ Excel/CSV</button></div><input id="rf" type="file" accept=".json" hidden onchange="A.restore(this)">` : ''), d => {
+      (own ? `<hr><div class="btnrow"><button class="btn ghost sm" onclick="A.backup()">⬇ ব্যাকআপ (JSON)</button><button class="btn ghost sm" onclick="$('#rf').click()">⬆ রিস্টোর</button><button class="btn ghost sm" onclick="A.csv()">⬇ Excel/CSV</button></div><input id="rf" type="file" accept=".json" hidden onchange="A.restore(this)"><div class="btnrow"><button class="btn ghost sm" style="color:var(--err)" onclick="closeSheet();A.resetAll()">🗑 সম্পূর্ণ সিস্টেম রিসেট</button></div>` : '') + `<p class="note" style="text-align:center;margin-top:14px">Copyright © MD NURNABI</p>`, d => {
         const v = vals(d);
         if (v.apiurl || v.apitok) { if (v.apiurl && !/^https:\/\//.test(v.apiurl)) { toast('Worker URL অবশ্যই https:// দিয়ে শুরু হতে হবে'); return false; } localStorage.bb_api = JSON.stringify({ url: v.apiurl.trim(), token: v.apitok.trim() }); } else localStorage.removeItem('bb_api');
         if (own) { const m = Object.assign({ id: 'main' }, D.settings.main, { shop: v.shop || 'BlashBerry', rooms: [v.room1 || 'সাধারণ', v.room2 || 'কনফার্মেশন'], chatDays: Math.min(60, Math.max(3, Math.round(n(v.chatDays)) || 10)), teamUrl: (v.teamurl || '').trim(), teamToken: (v.teamtok || '').trim(), couriers: v.couriers.split(',').map(s => s.trim()).filter(Boolean), cod: Object.fromEntries(c.couriers.map((nm, i) => [nm, { pct: v['codp' + i] === '' ? 0 : v['codp' + i], base: v['codb' + i] || 'full' }])) }); if (v.openCash !== undefined) m.openCash = v.openCash; save('settings', m, true); }
@@ -369,10 +369,21 @@ const A = {
   backup() { A.dl(`blashberry-backup-${today()}.json`, JSON.stringify(S), 'application/json'); },
   restore(inp) {
     const f = inp.files[0]; if (!f) return; f.text().then(t => {
-      const J = JSON.parse(t); if (!(J._v >= 2)) { S._v = 1; COLLS.forEach(c => Object.values(J[c] || {}).forEach(r => { if (!S[c][r.id] || S[c][r.id]._u < r._u) S[c][r.id] = r; })); migrate(S); }
-      else COLLS.forEach(c => Object.values(J[c] || {}).forEach(r => { if (!S[c][r.id] || S[c][r.id]._u < r._u) S[c][r.id] = r; }));
+      const J = JSON.parse(t), take = (c, r) => { const cur = S[c][r.id]; if (!cur || cur._u < r._u) S[c][r.id] = r; else if (cur._d && !r._d) S[c][r.id] = Object.assign({}, r, { _u: Date.now() }); };   // a record wiped by "reset" comes back from the backup
+      if (!(J._v >= 2)) { S._v = 1; COLLS.forEach(c => Object.values(J[c] || {}).forEach(r => take(c, r))); migrate(S); }
+      else COLLS.forEach(c => Object.values(J[c] || {}).forEach(r => take(c, r)));
       COLLS.forEach(c => Object.values(S[c]).forEach(r => push(c, r))); persist(); closeSheet(); render(); toast('রিস্টোর হয়েছে');
     });
+  },
+  resetAll() {
+    if (!isOwner()) return toast('শুধু Owner রিসেট করতে পারবেন'); view.bkDone = false;
+    sheet('⚠️ সম্পূর্ণ সিস্টেম রিসেট', `<div class="panel"><b>এতে সব অর্ডার, বিক্রি, ক্রয়, প্রোডাক্ট, খরচ, ক্যাশ, লোন, চ্যাট ইত্যাদির ডেটা মুছে যাবে — সবার ফোনেই।</b><p class="note">দোকানের সেটিংস (নাম, কুরিয়ার, COD চার্জ), স্টাফ ও লগইন থাকবে। আগে ব্যাকআপ নামান; পরে সেটিংস → ⬆ রিস্টোর দিয়ে ব্যাকআপ ফাইল দিলে সব ডেটা ফিরে আসবে।</p></div><div class="btnrow"><button class="btn sm" onclick="A.backup();view.bkDone=true;toast('✓ ব্যাকআপ নামানো হয়েছে — ফাইলটা সেভ করে রাখুন')">⬇ ১. আগে ব্যাকআপ নামান</button></div>` + fld('confirm', '২. নিশ্চিত করতে বড় অক্ষরে RESET লিখুন', 'text', ''),
+      d => { if (!view.bkDone) { toast('আগে ব্যাকআপ নামান'); return false; } if (String(vals(d).confirm || '').trim() !== 'RESET') { toast('নিশ্চিত করতে RESET লিখুন'); return false; } A.doReset(); }, 'রিসেট করুন');
+  },
+  doReset() {
+    if (!isOwner()) return; let k = 0;
+    COLLS.forEach(c => { if (c === 'settings') return; Object.values(S[c]).forEach(r => { if (!r._d) { r._d = true; put(c, r); k++; } }); });
+    logAct('সম্পূর্ণ সিস্টেম রিসেট (' + k + ' রেকর্ড)'); toast('✓ রিসেট হয়েছে (' + k + ' রেকর্ড)'); render();
   },
   csv() {
     const rows = [['Order No', 'Date', 'Customer', 'Phone', 'Address', 'Source', 'Status', 'Courier', 'Tracking', 'Total', 'Paid', 'Due']];

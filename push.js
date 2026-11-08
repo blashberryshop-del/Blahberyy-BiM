@@ -43,7 +43,7 @@ async function pushSubsList() {
 async function pushNotify(m, onlyMe) {                         // fire-and-forget; never blocks or breaks the app
   try {
     const t = TEAM(); if (!t || !SY.db || !profile || profile.local || !navigator.onLine) return null;
-    let subs = (await pushSubsList()).filter(s => s && s.sub && s.sub.endpoint && (onlyMe ? s.id === devId() : s.id !== devId()));
+    let subs = (await pushSubsList()).filter(s => s && s.sub && s.sub.endpoint && (onlyMe ? s.id === devId() : s.id !== devId()) && (!m.only || m.only.includes(s.uid)) && !(m.exclude && m.exclude.includes(s.uid)));
     if (isOwner() && SY.staff && !onlyMe) subs = subs.filter(s => s.uid === SY.uid || (SY.staff[s.uid] && SY.staff[s.uid].active !== false && PM.fix(SY.staff[s.uid].perms || {}).orders_view));   // don't notify people whose access was removed
     if (!subs.length) return { sent: 0 };
     const gone = []; let sent = 0;
@@ -55,7 +55,9 @@ async function pushNotify(m, onlyMe) {                         // fire-and-forge
 function pushChat(m) {
   const room = m.orderId ? '#' + ((S.orders[m.orderId] || {}).no || '') : roomName(m.room || 'g1');
   const body = m.imgId ? '📷 ছবি পাঠিয়েছে' : m.card ? '📦 অর্ডার #' + ((m.snap || {}).no || '') + (m.text ? ' — ' + m.text : '') : (m.text || '');
-  pushNotify({ title: `💬 ${m.name || 'টিম'} · ${room}`, body, url: '#chat', tag: 'chat-' + (m.orderId || m.room || 'g1') });
+  const ms = m.mentions || [];
+  pushNotify({ title: `💬 ${m.name || 'টিম'} · ${room}`, body, url: '#chat', tag: 'chat-' + (m.orderId || m.room || 'g1'), exclude: ms });
+  if (ms.length) pushNotify({ title: `🔔 ${m.name || 'কেউ'} আপনাকে ট্যাগ করেছে · ${room}`, body, url: '#chat', tag: 'mention-' + m.id, force: true, only: ms });   // tagged people get their own, louder notification
 }
 function pushOrder(o) {
   pushNotify({ title: '🛒 নতুন অর্ডার #' + (o.no || ''), body: [o.customer, o.source, o.bill ? '৳' + o.bill : ''].filter(Boolean).join(' · '), url: '#orders', tag: 'order-' + (o.no || '') });

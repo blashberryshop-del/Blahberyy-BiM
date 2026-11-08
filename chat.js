@@ -1,11 +1,13 @@
 /* BlashBerry — team chat: 2 groups + a discussion thread per order; reply, forward, emoji reactions.
    Messages live in `chat` ({id,t,uid,name,text,room,orderId?,card?,snap?,reply?,fwd?,react?}). Only people who can see orders can read/write
    (enforced by the generated Firestore rules); edit/soft-delete only your own messages (owner: any); anyone may set THEIR OWN reaction. */
-const ROOMS = ['g1', 'g2'], REACTS = ['👍', '✅', '❤️', '😂', '🙏', '❗'];
+const REACTS = ['👍', '✅', '❤️', '😂', '🙏', '❗'];
 const chatDays = () => { const d = cfg() && cfg().chatDays; return Math.min(60, Math.max(3, Math.round(n(d)) || 10)); };
 const chatCutoff = () => Date.now() - chatDays() * 86400000;
-const roomName = r => { const L = (cfg() && cfg().rooms) || []; return (r === 'g2' ? L[1] || 'কনফার্মেশন' : L[0] || 'সাধারণ'); };
-const msgRoom = m => m.room === 'g2' ? 'g2' : 'g1';
+const extraGroups = () => ((cfg() && cfg().groups) || []).filter(g => g && /^g[a-z0-9]+$/.test(g.id || '') && g.id !== 'g1' && g.id !== 'g2');
+const roomList = () => ['g1', 'g2'].concat(extraGroups().map(g => g.id));
+const roomName = r => { const L = (cfg() && cfg().rooms) || []; if (r === 'g2') return L[1] || 'কনফার্মেশন'; if (r === 'g1' || !r) return L[0] || 'সাধারণ'; const g = extraGroups().find(x => x.id === r); return g ? g.name : 'গ্রুপ'; };
+const msgRoom = m => /^g[a-z0-9]+$/.test(m.room || '') ? m.room : 'g1';
 const chatOn = () => !!cloudCfg() && !!profile && !profile.local && can('orders_view');
 const chatAll = () => live(S, 'chat').sort((a, b) => (a.t || 0) - (b.t || 0));
 const isThreadMsg = m => !!m.orderId && !m.card;
@@ -27,7 +29,38 @@ const chatUnread = () => {
 };
 const hhmm = t => t ? new Date(t).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; };
-const curRoom = () => view.chatRoom === 'g2' ? 'g2' : 'g1';
+const curRoom = () => roomList().includes(view.chatRoom) ? view.chatRoom : 'g1';
+
+/* ---------- @mention: roster (who can be tagged) + auto-growing typing box ---------- */
+const chatRoster = () => {
+  const mp = {}, staff = SY.staff || {};
+  if (isOwner() && Object.keys(staff).length) { Object.keys(staff).forEach(u => { if (staff[u].active !== false && staff[u].name) mp[u] = staff[u].name; }); }
+  else { ((cfg() && cfg().roster) || []).forEach(r => { if (r && r.u && r.n) mp[r.u] = r.n; }); Object.values(S.chat || {}).forEach(m => { if (m.uid && m.name && !m._d) mp[m.uid] = m.name; }); }
+  if (SY.uid && profile && profile.name) mp[SY.uid] = profile.name;
+  return Object.keys(mp).map(u => ({ u, n: mp[u] })).sort((a, b) => a.n.localeCompare(b.n));
+};
+function rosterSync() {                                          // owner keeps the team list in the synced settings, so every staff phone can tag everyone
+  try {
+    if (!isOwner() || !SY.staff || !Object.keys(SY.staff).length || !D) return;
+    const list = chatRoster().map(r => ({ u: r.u, n: r.n })); if (JSON.stringify(list) === JSON.stringify((D.settings.main || {}).roster || [])) return;
+    save('settings', Object.assign({ id: 'main' }, D.settings.main, { roster: list }), true);
+  } catch (e) { }
+}
+const mentionsOf = text => { const t = String(text || '').toLowerCase(); return chatRoster().filter(r => r.u !== SY.uid && t.includes(('@' + r.n).toLowerCase())).map(r => r.u); };
+function autosize(el) {
+  if (!el) return; const cap = Math.max(90, Math.min(220, Math.round(innerHeight * 0.38)));
+  el.style.height = 'auto'; const h = el.scrollHeight + 2; el.style.height = Math.min(h, cap) + 'px'; el.style.overflowY = h > cap ? 'auto' : 'hidden';
+  if (el.id === 'chin') { const m = $('#main'), atEnd = m && m.scrollHeight - m.scrollTop - m.clientHeight < 260; chatDock(true, false); if (atEnd) scrollEnd(); }
+  else if (el.id === 'thin') { const t = $('#thlist'); if (t) t.scrollTop = t.scrollHeight; }
+}
+const popOf = el => document.getElementById(el.id === 'thin' ? 'mnpop2' : 'mnpop');
+function mentionCheck(el) {
+  const pop = popOf(el); if (!pop) return; const before = el.value.slice(0, el.selectionStart || 0), mt = /(^|\s)@([^\s@]{0,20})$/.exec(before);
+  if (!mt) { pop.classList.add('hide'); pop.innerHTML = ''; return; }
+  const q = mt[2].toLowerCase(), L = chatRoster().filter(r => r.u !== SY.uid && r.n.toLowerCase().includes(q)).slice(0, 8);
+  if (!L.length) { pop.classList.add('hide'); pop.innerHTML = ''; return; }
+  pop.innerHTML = L.map(r => `<div class="mni" onpointerdown="event.preventDefault()" onclick="A.pickMention('${el.id}','${r.u}')"><span class="av">${esc(r.n.slice(0, 1).toUpperCase())}</span>${esc(r.n)}</div>`).join(''); pop.classList.remove('hide');
+}
 
 function orderText(o, r) {
   return [`#${o.no} ${o.customer || ''}`, o.phone || '', o.address || '', `বিল: ${money(r ? r.total : n(o.bill))}${r && r.cod ? ' (COD ' + money(r.cod) + ')' : ''}`, o.courier ? `কুরিয়ার: ${o.courier}${o.tracking ? ' ' + o.tracking : ''}` : '', o.note ? `নোট: ${o.note}` : ''].filter(Boolean).join('\n');
@@ -55,27 +88,31 @@ function chatBubble(m) {
       `<div class="os"><b>${money(r ? r.total : n(sn.bill))}</b>${o && o.courier ? ' · ' + esc(o.courier) : ''}${o ? callTag(o) : ''}</div></div>` +
       `<div class="btnrow" style="margin:6px 0 0"><button class="btn ghost sm" onclick="event.stopPropagation();A.thread('${m.orderId}')">💬 আলোচনা${chatCount(m.orderId) ? ' (' + chatCount(m.orderId) + ')' : ''}</button><button class="btn ghost sm" onclick="event.stopPropagation();A.copyOrder('${m.orderId}')">📋 কপি</button></div>`;
   }
-  return `<div class="cm ${mine ? 'me' : ''}" id="m_${m.id}"><div class="cb" onclick="A.msgMenu('${m.id}')"><div class="cn">${mine ? 'আমি' : esc(m.name || 'স্টাফ')} · ${hhmm(m.t)}</div>${body}${m.text ? `<div class="ct">${esc(m.text)}</div>` : ''}${reactHtml(m)}</div></div>`;
+  const mm = m.mentions || [], tagged = !mine && mm.includes(SY.uid); let ct = esc(m.text || '');
+  if (mm.length) { const ro = chatRoster(); mm.forEach(u => { const r = ro.find(x => x.u === u); if (r) ct = ct.split(esc('@' + r.n)).join(`<span class="mn${u === SY.uid ? ' you' : ''}">${esc('@' + r.n)}</span>`); }); }
+  return `<div class="cm ${mine ? 'me' : ''}" id="m_${m.id}"><div class="cb${tagged ? ' tg' : ''}" onclick="A.msgMenu('${m.id}')">${tagged ? '<div class="tgl">🔔 আপনাকে ট্যাগ করা হয়েছে</div>' : ''}<div class="cn">${mine ? 'আমি' : esc(m.name || 'স্টাফ')} · ${hhmm(m.t)}</div>${body}${m.text ? `<div class="ct">${ct}</div>` : ''}${reactHtml(m)}</div></div>`;
 }
 const replyBar = key => view[key] ? `<div class="rbar"><span>↩ <b>${esc(view[key].name || '')}</b> ${esc(view[key].text || '')}</span><button class="x" onclick="view.${key}=null;chatRefresh()">✕</button></div>` : '';
 const chatListHtml = () => { const L = chatGroup(curRoom()).slice(-150); return L.length ? L.map(chatBubble).join('') : '<p class="muted" style="text-align:center;margin:40px 0">এই গ্রুপে এখনো কোনো মেসেজ নেই। প্রথম মেসেজ পাঠান।</p>'; };
-const roomTabs = () => `<div class="chips">${ROOMS.map(r => { const u = roomUnread(r); return `<button class="chip ${curRoom() === r ? 'on' : ''}" onclick="A.room('${r}')">${esc(roomName(r))}${u ? ` <small>${u}</small>` : ''}</button>`; }).join('')}</div>`;
+const roomTabs = () => `<div class="chips">${roomList().map(r => { const u = roomUnread(r); return `<button class="chip ${curRoom() === r ? 'on' : ''}" onclick="A.room('${r}')">${esc(roomName(r))}${u ? ` <small>${u}</small>` : ''}</button>`; }).join('')}${isOwner() ? `<button class="chip" onclick="A.groupAdd()" title="নতুন গ্রুপ">＋ গ্রুপ</button><button class="chip" onclick="A.groupManage()" title="গ্রুপ ম্যানেজ">⚙</button>` : ''}</div>`;
 const scrollEnd = () => { const el = $('#main'); if (!el) return; el.style.scrollBehavior = 'auto'; el.scrollTop = el.scrollHeight; requestAnimationFrame(() => { el.style.scrollBehavior = ''; }); };
 function vChat() {
   if (!cloudCfg()) return head('টিম চ্যাট', '') + `<div class="panel"><b>আগে ক্লাউড সিঙ্ক চালু করুন</b><p class="note">টিম চ্যাট সবার ফোনে পৌঁছাতে Firebase সিঙ্ক লাগে। সেটআপ গাইড দেখুন।</p></div>`;
   return head('টিম চ্যাট', '') + `<div id="roomtabs">${roomTabs()}</div><div id="chatlist">${chatListHtml()}</div>`;
 }
 // the typing box lives OUTSIDE the scrolling list (fixed just above the bottom menu), so it never moves and never covers a message
+const navH = () => { const e = $('#nav'); return e && getComputedStyle(e).position !== 'static' ? e.offsetHeight : 0; };   // on desktop the menu is a side bar, so nothing sits under the typing box
 function chatDock(on, fresh) {
-  const d = $('#chatdock'), m = $('#main'), nav = $('#nav'); if (!d) return;
-  if (!on) { d.classList.add('hide'); d.innerHTML = ''; if (m) m.style.paddingBottom = ''; return; }
+  const d = $('#chatdock'), m = $('#main'); if (!d) return;
+  if (!on) { d.classList.add('hide'); d.innerHTML = ''; d.style.bottom = ''; if (m) m.style.paddingBottom = ''; return; }
   if (fresh || !d.innerHTML) {
-    d.innerHTML = `<div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><button class="btn ghost sm" onclick="A.imgPick('')" title="ছবি পাঠান">📷</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div>`;
+    d.innerHTML = `<div id="mnpop" class="mnpop hide"></div><div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><button class="btn ghost sm" onclick="A.imgPick('')" title="ছবি পাঠান">📷</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value;A.typing(this)" onclick="mentionCheck(this)">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div>`;
   }
-  d.classList.remove('hide'); d.style.bottom = (nav ? nav.offsetHeight : 62) + 'px';
-  if (m) m.style.paddingBottom = (d.offsetHeight + (nav ? nav.offsetHeight : 62) + 16) + 'px';
+  rosterSync(); d.classList.remove('hide'); const ci = $('#chin'); if (fresh && ci) autosize0(ci); d.style.bottom = navH() + 'px';
+  if (m) m.style.paddingBottom = (d.offsetHeight + 16) + 'px';
   if (fresh) { markSeen(curRoom()); scrollEnd(); setTimeout(scrollEnd, 120); }
 }
+const autosize0 = el => { const cap = Math.max(90, Math.min(220, Math.round(innerHeight * 0.38))); el.style.height = 'auto'; const h = el.scrollHeight + 2; el.style.height = Math.min(h, cap) + 'px'; el.style.overflowY = h > cap ? 'auto' : 'hidden'; };
 function chatBadge() {
   const b = $('#chatbtn'); if (!b) return;
   const on = chatOn(), u = on ? chatUnread() : 0;
@@ -94,12 +131,37 @@ function chatRefresh() {
 function threadHtml(id) { const L = chatThread(id); return L.length ? L.map(chatBubble).join('') : '<p class="muted" style="text-align:center">এই অর্ডার নিয়ে এখনো আলোচনা নেই।</p>'; }
 const afterMenu = from => { if (from) A.thread(from); };
 
+const saveGroups = (names, extras) => { save('settings', Object.assign({ id: 'main' }, D.settings.main, { rooms: names, groups: extras }), true); render(); };
 Object.assign(A, {
+  groupAdd() {
+    if (!isOwner()) return;
+    sheet('নতুন চ্যাট গ্রুপ', fld('name', 'গ্রুপের নাম (যেমন "প্যাকিং", "ডেলিভারি")', 'text', ''), d => {
+      const nm = (vals(d).name || '').trim().slice(0, 30); if (!nm) { toast('নাম লিখুন'); return false; }
+      const id = 'g' + Date.now().toString(36); saveGroups([roomName('g1'), roomName('g2')], extraGroups().concat([{ id, name: nm }]));
+      view.chatRoom = id; toast('✓ গ্রুপ তৈরি হয়েছে'); setTimeout(() => { if ($('#chatlist')) A.room(id); }, 60);
+    }, 'তৈরি করুন');
+  },
+  groupManage() {
+    if (!isOwner()) return;
+    const ex = extraGroups(), rows = roomList().map(r => fld('rn_' + r, 'গ্রুপের নাম', 'text', roomName(r)) + (r === 'g1' || r === 'g2' ? '' : fld('rd_' + r, 'এই গ্রুপ', 'select', 'k', [['k', 'রাখুন'], ['d', 'মুছে দিন (এর মেসেজ আর দেখা যাবে না)']]))).join('<hr>');
+    sheet('চ্যাট গ্রুপ ম্যানেজ', rows, d => {
+      const v = vals(d), nm = r => (v['rn_' + r] || '').trim().slice(0, 30) || roomName(r);
+      const extras = ex.filter(g => v['rd_' + g.id] !== 'd').map(g => ({ id: g.id, name: nm(g.id) }));
+      saveGroups([nm('g1'), nm('g2')], extras); if (!roomList().includes(view.chatRoom)) view.chatRoom = 'g1'; toast('✓ সেভ হয়েছে');
+    });
+  },
+  typing(el) { autosize(el); mentionCheck(el); },
+  pickMention(elId, u) {
+    const el = document.getElementById(elId), r = chatRoster().find(x => x.u === u); if (!el || !r) return;
+    const pos = el.selectionStart || el.value.length, before = el.value.slice(0, pos), after = el.value.slice(pos), nb = before.replace(/@[^\s@]{0,20}$/, '@' + r.n + ' ');
+    el.value = nb + after; el.selectionStart = el.selectionEnd = nb.length; if (elId === 'chin') view.chatDraft = el.value;
+    const p = popOf(el); if (p) { p.classList.add('hide'); p.innerHTML = ''; } autosize(el); el.focus();
+  },
   room(r) { view.chatRoom = r; markSeen(r); chatRefresh(); scrollEnd(); const i = $('#chin'); if (i) i.placeholder = roomName(r) + ' — মেসেজ লিখুন…'; },
   chatSend() {
     const i = $('#chin'); if (!i) return; const t = i.value.trim(); if (!t) return;
-    const x = { text: t.slice(0, 1500), room: curRoom() }; if (view.reply) x.reply = view.reply;
-    if (chatPost(x)) { i.value = ''; view.chatDraft = ''; view.reply = null; chatRefresh(); scrollEnd(); i.focus(); }
+    const x = { text: t.slice(0, 1500), room: curRoom() }; if (view.reply) x.reply = view.reply; const mn = mentionsOf(x.text); if (mn.length) x.mentions = mn;
+    if (chatPost(x)) { i.value = ''; view.chatDraft = ''; view.reply = null; autosize0(i); const p = popOf(i); if (p) p.classList.add('hide'); chatRefresh(); scrollEnd(); i.focus(); }
   },
   msgMenu(id) {
     const m = S.chat[id]; if (!m || m._d) return; const from = view.thread || null, own = m.uid === SY.uid || isOwner();
@@ -124,9 +186,9 @@ Object.assign(A, {
   msgCopy(id) { const m = S.chat[id]; closeSheet(); (navigator.clipboard ? navigator.clipboard.writeText(m.text || '') : Promise.reject()).then(() => toast('✓ কপি হয়েছে')).catch(() => prompt('কপি করুন:', m.text || '')); afterMenu(view.menuFrom); },
   msgFwd(id) {
     const m = S.chat[id]; if (!m) return; const from = view.menuFrom;
-    sheet('ফরোয়ার্ড — কোন গ্রুপে?', `<div class="panel"><div class="os">${esc(msgPreview(m))}</div></div>` + fld('room', 'গ্রুপ', 'select', curRoom(), ROOMS.map(r => [r, roomName(r)])),
+    sheet('ফরোয়ার্ড — কোন গ্রুপে?', `<div class="panel"><div class="os">${esc(msgPreview(m))}</div></div>` + fld('room', 'গ্রুপ', 'select', curRoom(), roomList().map(r => [r, roomName(r)])),
       d => {
-        const v = vals(d), x = { room: v.room === 'g2' ? 'g2' : 'g1', text: m.text || '', fwd: { name: m.name || '' } };
+        const v = vals(d), x = { room: roomList().includes(v.room) ? v.room : 'g1', text: m.text || '', fwd: { name: m.name || '' } };
         if (m.card) { x.card = true; x.orderId = m.orderId; x.snap = m.snap; }
         if (!chatPost(x)) return false; toast('✓ ফরোয়ার্ড হয়েছে'); setTimeout(() => from ? A.thread(from) : (view.chatRoom = x.room, (location.hash || '').slice(1).split('?')[0] === 'chat' ? (chatRefresh(), A.room(x.room)) : A.nav('chat')), 30);
       }, 'ফরোয়ার্ড');
@@ -146,9 +208,9 @@ Object.assign(A, {
   forward(id) {
     const o = S.orders[id]; if (!o) return;
     if (!chatOn()) return toast('টিম চ্যাটের জন্য ক্লাউড সিঙ্ক চালু থাকতে হবে');
-    sheet(`গ্রুপে পাঠান — #${o.no} ${esc(o.customer || '')}`, `<div class="panel"><div class="os" style="white-space:pre-line">${esc(orderText(o, R.O[id] && { total: R.O[id].total, cod: R.O[id].cod }))}</div></div>` + fld('room', 'কোন গ্রুপে', 'select', curRoom(), ROOMS.map(r => [r, roomName(r)])) + fld('text', 'মন্তব্য (ঐচ্ছিক, যেমন "ঠিকানা ঠিক আছে?")', 'text', ''),
+    sheet(`গ্রুপে পাঠান — #${o.no} ${esc(o.customer || '')}`, `<div class="panel"><div class="os" style="white-space:pre-line">${esc(orderText(o, R.O[id] && { total: R.O[id].total, cod: R.O[id].cod }))}</div></div>` + fld('room', 'কোন গ্রুপে', 'select', curRoom(), roomList().map(r => [r, roomName(r)])) + fld('text', 'মন্তব্য (ঐচ্ছিক, যেমন "ঠিকানা ঠিক আছে?")', 'text', ''),
       d => {
-        const r = R.O[id] || {}, v = vals(d), room = v.room === 'g2' ? 'g2' : 'g1';
+        const r = R.O[id] || {}, v = vals(d), room = roomList().includes(v.room) ? v.room : 'g1';
         if (!chatPost({ room, orderId: id, card: true, text: v.text || '', snap: { no: o.no, customer: o.customer || '', phone: o.phone || '', address: o.address || '', bill: r.total || n(o.bill) } })) return false;
         toast('✓ টিম গ্রুপে পাঠানো হয়েছে'); view.chatRoom = room;
         if ((location.hash || '').slice(1).split('?')[0] === 'chat') { A.room(room); } else setTimeout(() => A.nav('chat'), 30);
@@ -157,14 +219,14 @@ Object.assign(A, {
   thread(id) {
     const o = S.orders[id]; if (!o) return; if (!chatOn()) return toast('টিম চ্যাটের জন্য ক্লাউড সিঙ্ক চালু থাকতে হবে');
     view.thread = id; markSeen('t');
-    const d = sheet(`💬 #${o.no} ${esc(o.customer || '')} — আলোচনা`, `<div id="thlist" class="thlist">${threadHtml(id)}</div><div class="chatbar" style="position:static"><div id="thrbar">${replyBar('thReply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.imgPick('${id}')" title="ছবি পাঠান">📷</button><textarea id="thin" rows="1" placeholder="এই অর্ডার নিয়ে লিখুন…"></textarea><button class="btn sm" onclick="A.threadSend('${id}')">পাঠান</button></div></div>`);
+    const d = sheet(`💬 #${o.no} ${esc(o.customer || '')} — আলোচনা`, `<div id="thlist" class="thlist">${threadHtml(id)}</div><div class="chatbar" style="position:relative"><div id="mnpop2" class="mnpop hide"></div><div id="thrbar">${replyBar('thReply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.imgPick('${id}')" title="ছবি পাঠান">📷</button><textarea id="thin" rows="1" placeholder="এই অর্ডার নিয়ে লিখুন…" oninput="A.typing(this)" onclick="mentionCheck(this)"></textarea><button class="btn sm" onclick="A.threadSend('${id}')">পাঠান</button></div></div>`);
     const mo = new MutationObserver(() => { if (!document.body.contains(d)) { if (view.thread === id && !$('#sheet')) view.thread = null; mo.disconnect(); } }); mo.observe(document.body, { childList: true });
     const t = $('#thlist'); if (t) t.scrollTop = t.scrollHeight; chatBadge();
   },
   threadSend(id) {
     const i = $('#thin'); if (!i) return; const t = i.value.trim(); if (!t) return;
-    const x = { orderId: id, text: t.slice(0, 1500) }; if (view.thReply) x.reply = view.thReply;
-    if (chatPost(x)) { i.value = ''; view.thReply = null; chatRefresh(); i.focus(); }
+    const x = { orderId: id, text: t.slice(0, 1500) }; if (view.thReply) x.reply = view.thReply; const mn = mentionsOf(x.text); if (mn.length) x.mentions = mn;
+    if (chatPost(x)) { i.value = ''; view.thReply = null; autosize0(i); const p = popOf(i); if (p) p.classList.add('hide'); chatRefresh(); i.focus(); }
   },
   copyOrder(id) {
     const o = S.orders[id]; if (!o) return; const r = R.O[id], txt = orderText(o, r && { total: r.total, cod: r.cod });
@@ -250,3 +312,5 @@ async function chatCleanup(force) {
   } catch (e) { /* offline or not allowed yet: try again next time */ }
 }
 setInterval(() => { try { chatCleanup(); } catch (e) { } }, 30 * 60 * 1000);
+
+window.mentionCheck = mentionCheck;
