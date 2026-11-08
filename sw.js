@@ -1,4 +1,4 @@
-const V = 'bb-v20', FILES = ['./', './index.html', './perms.js', './core.js', './statement.js', './codes.js', './label.js', './app.js', './actions.js', './chat.js', './courier.js', './flow.js', './push.js', './views.js', './boot.js', './manifest.json', './icon-192.png', './icon-512.png'];
+const V = 'bb-v21', FILES = ['./', './index.html', './perms.js', './core.js', './statement.js', './codes.js', './label.js', './app.js', './actions.js', './chat.js', './courier.js', './flow.js', './push.js', './views.js', './boot.js', './manifest.json', './icon-192.png', './icon-512.png'];
 const CDN = /^(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com)$/;
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== V).map(x => caches.delete(x)))).then(() => self.clients.claim())); });

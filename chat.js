@@ -95,12 +95,25 @@ function chatBubble(m) {
 const replyBar = key => view[key] ? `<div class="rbar"><span>↩ <b>${esc(view[key].name || '')}</b> ${esc(view[key].text || '')}</span><button class="x" onclick="view.${key}=null;chatRefresh()">✕</button></div>` : '';
 const chatListHtml = () => { const L = chatGroup(curRoom()).slice(-150); return L.length ? L.map(chatBubble).join('') : '<p class="muted" style="text-align:center;margin:40px 0">এই গ্রুপে এখনো কোনো মেসেজ নেই। প্রথম মেসেজ পাঠান।</p>'; };
 const roomTabs = () => `<div class="chips">${roomList().map(r => { const u = roomUnread(r); return `<button class="chip ${curRoom() === r ? 'on' : ''}" onclick="A.room('${r}')">${esc(roomName(r))}${u ? ` <small>${u}</small>` : ''}</button>`; }).join('')}${isOwner() ? `<button class="chip" onclick="A.groupAdd()" title="নতুন গ্রুপ">＋ গ্রুপ</button><button class="chip" onclick="A.groupManage()" title="গ্রুপ ম্যানেজ">⚙</button>` : ''}</div>`;
-const scrollEnd = () => { const el = $('#main'); if (!el) return; el.style.scrollBehavior = 'auto'; el.scrollTop = el.scrollHeight; requestAnimationFrame(() => { el.style.scrollBehavior = ''; }); };
+let STICK = 0;                                                   // photos finish loading after the list is drawn and make it taller — keep the view glued to the end for a few seconds unless the user scrolls up
+document.addEventListener('load', e => { if (e.target && e.target.tagName === 'IMG' && Date.now() < STICK) { const el = $('#main'); if (el && (location.hash || '').slice(1).split('?')[0] === 'chat') el.scrollTop = el.scrollHeight; } }, true);
+['wheel', 'touchmove', 'keydown'].forEach(ev => document.addEventListener(ev, () => { STICK = 0; }, { passive: true, capture: true }));
+const scrollEnd = () => { STICK = Date.now() + 5000; const el = $('#main'); if (!el) return; el.style.scrollBehavior = 'auto'; el.scrollTop = el.scrollHeight; requestAnimationFrame(() => { el.style.scrollBehavior = ''; }); };
 function vChat() {
   if (!cloudCfg()) return head('টিম চ্যাট', '') + `<div class="panel"><b>আগে ক্লাউড সিঙ্ক চালু করুন</b><p class="note">টিম চ্যাট সবার ফোনে পৌঁছাতে Firebase সিঙ্ক লাগে। সেটআপ গাইড দেখুন।</p></div>`;
   return head('টিম চ্যাট', '') + `<div id="roomtabs">${roomTabs()}</div><div id="chatlist">${chatListHtml()}</div>`;
 }
 // the typing box lives OUTSIDE the scrolling list (fixed just above the bottom menu), so it never moves and never covers a message
+function dockPad(keepEnd) {                                      // typing box sits above the menu; the list gets exactly that much room at its end, so the last message is never covered
+  const d = $('#chatdock'), m = $('#main'); if (!d || !m || d.classList.contains('hide')) return;
+  const atEnd = keepEnd && m.scrollHeight - m.scrollTop - m.clientHeight < 320;
+  d.style.bottom = navH() + 'px'; m.style.paddingBottom = (d.offsetHeight + navH() + 24) + 'px'; if (atEnd) scrollEnd();
+}
+let DOCKRO = null;
+function dockWatch() {                                           // fonts loading, the keyboard, rotating the phone … anything that changes the box or menu height re-fits the list
+  if (DOCKRO || !window.ResizeObserver) return; const d = $('#chatdock'), nav = $('#nav'); if (!d) return;
+  DOCKRO = new ResizeObserver(() => dockPad(true)); DOCKRO.observe(d); if (nav) DOCKRO.observe(nav); window.addEventListener('resize', () => dockPad(true));
+}
 const navH = () => { const e = $('#nav'); return e && getComputedStyle(e).position !== 'static' ? e.offsetHeight : 0; };   // on desktop the menu is a side bar, so nothing sits under the typing box
 function chatDock(on, fresh) {
   const d = $('#chatdock'), m = $('#main'); if (!d) return;
@@ -108,8 +121,8 @@ function chatDock(on, fresh) {
   if (fresh || !d.innerHTML) {
     d.innerHTML = `<div id="mnpop" class="mnpop hide"></div><div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><button class="btn ghost sm" onclick="A.imgPick('')" title="ছবি পাঠান">📷</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value;A.typing(this)" onclick="mentionCheck(this)">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div>`;
   }
-  rosterSync(); d.classList.remove('hide'); const ci = $('#chin'); if (fresh && ci) autosize0(ci); d.style.bottom = navH() + 'px';
-  if (m) m.style.paddingBottom = (d.offsetHeight + navH() + 16) + 'px';
+  rosterSync(); d.classList.remove('hide'); const ci = $('#chin'); if (fresh && ci) autosize0(ci);
+  dockPad(false); dockWatch();
   if (fresh) { markSeen(curRoom()); scrollEnd(); setTimeout(scrollEnd, 120); }
 }
 const autosize0 = el => { const cap = Math.max(90, Math.min(220, Math.round(innerHeight * 0.38))); el.style.height = 'auto'; const h = el.scrollHeight + 2; el.style.height = Math.min(h, cap) + 'px'; el.style.overflowY = h > cap ? 'auto' : 'hidden'; };
