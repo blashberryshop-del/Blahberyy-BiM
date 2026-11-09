@@ -244,10 +244,11 @@ function callTag(o) {
 const callMatch = (o, f) => !f || (f === 'todo' ? o.status === 'Pending' && !o.call : f === 'ct_call' || f === 'ct_courier' ? o.cancelType === f.slice(3) && CANCEL_ST.includes(o.status) : o.call === f && (f === 'ok' || o.status === 'Pending'));
 function callLine(o) {
   if (!o.call || !CALLS[o.call]) return '';
-  const ago = o.callAt ? new Date(o.callAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  const ago = o.callAt ? fmtDT(o.callAt) : '';
   return `${CALLS[o.call][0]} ${CALLS[o.call][1]}${o.callDate ? ' · ' + fmtD(o.callDate) : ''}${o.callBy ? ' · ' + esc(o.callBy) : ''}${ago ? ' · ' + ago : ''}${o.callNote ? ' — ' + esc(o.callNote) : ''}`;
 }
 const badge = s => `<span class="bd ${BADGE[s] || 'b-gray'}">${STBN[s] || s}</span>`;
+const fmtDT = t => { if (!t) return ''; const d = new Date(t); if (isNaN(d)) return ''; let h = d.getHours(); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${String(d.getDate()).padStart(2, '0')} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]}, ${h}:${String(d.getMinutes()).padStart(2, '0')} ${ap}`; };   // 12-hour clock: "09 Nov, 1:00 PM"
 const fmtD = d => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 const seg = (k, val, opts, fn) => `<div class="seg">${opts.map(([v, l]) => `<button class="${String(val) === String(v) ? 'on' : ''}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`;
 

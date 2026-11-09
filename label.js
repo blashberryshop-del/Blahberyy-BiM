@@ -9,11 +9,11 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = v => '৳' + Math.round(+v || 0).toLocaleString('en-IN');
   const CSS = `.blbl{box-sizing:border-box;overflow:hidden;background:#fff;color:#000;font-family:system-ui,"Noto Sans Bengali","Hind Siliguri",Arial,sans-serif;line-height:1.25;padding:2mm;display:flex;flex-direction:column;gap:1.2mm}
-.blbl.bdr{border:.35mm solid #000}.blbl .hd{display:flex;justify-content:space-between;align-items:baseline;gap:2mm;border-bottom:.25mm solid #000;padding-bottom:.8mm;font-weight:700}
-.blbl .hd small{font-weight:600;font-size:.85em;white-space:nowrap}.blbl .cd{display:flex;flex-direction:column;gap:.5mm}.blbl .cdi{display:block}
-.blbl .cid{text-align:center;font-weight:700;letter-spacing:.2mm;font-size:.95em;word-break:break-all}.blbl .nm{font-size:1.25em;font-weight:700;word-break:break-word}
-.blbl .ph{font-size:1.3em;font-weight:700;letter-spacing:.2mm}.blbl .ad{word-break:break-word}.blbl .cod{border:.4mm solid #000;text-align:center;font-weight:800;font-size:1.5em;padding:.6mm 0}
-.blbl .pd{text-align:center;font-weight:700;border:.25mm dashed #000;padding:.4mm 0}.blbl .sm{font-size:.9em;word-break:break-word}`;
+.blbl.bdr{border:.35mm solid #000}.blbl .lhd{display:flex;justify-content:space-between;align-items:baseline;gap:2mm;border-bottom:.25mm solid #000;padding-bottom:.8mm;font-weight:700}
+.blbl .lhd small{font-weight:600;font-size:.85em;text-align:right}.blbl .lcd{display:flex;flex-direction:column;gap:.5mm}.blbl .lcdi{display:block}
+.blbl .lcid{text-align:center;font-weight:700;letter-spacing:.2mm;font-size:.95em;word-break:break-all}.blbl .lnm{font-size:1.25em;font-weight:700;word-break:break-word}
+.blbl .lph{font-size:1.3em;font-weight:700;letter-spacing:.2mm}.blbl .lad{word-break:break-word}.blbl .lcod{border:.4mm solid #000;text-align:center;font-weight:800;font-size:1.5em;padding:.6mm 0}
+.blbl .lpd{text-align:center;font-weight:700;border:.25mm dashed #000;padding:.4mm 0}.blbl .lsm{font-size:.9em;word-break:break-word}`;
 
   function codeValue(o) { return o.tracking ? String(o.tracking) : 'BB' + o.no; }
   function itemsText(o) { return (o.items || []).map(i => esc(i.code) + '×' + i.qty).join(', '); }
@@ -24,23 +24,23 @@
     const dt = o.date ? new Date(o.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
     const parts = cfg.blocks.filter(b => b.on).map(b => {
       switch (b.k) {
-        case 'header': return `<div class="hd"><span>${esc(shop || 'BlashBerry')}</span><small>#${esc(o.no)} · ${esc(dt)}${o.courier ? ' · ' + esc(o.courier) : ''}</small></div>`;
+        case 'header': return `<div class="lhd"><span>${esc(shop || 'BlashBerry')}</span><small>#${esc(o.no)} · ${esc(dt)}${o.courier ? ' · ' + esc(o.courier) : ''}</small></div>`;
         case 'code': {
-          if (cfg.codeType === 'none') return cfg.showCid ? `<div class="cid">${esc(code)}</div>` : '';
+          if (cfg.codeType === 'none') return cfg.showCid ? `<div class="lcid">${esc(code)}</div>` : '';
           const wMm = (W - 4) * cfg.codeW / 100, qMm = Math.min(wMm, H * 0.36); let body; // QR is square: cap its height so the rest of the label still fits
           try {
             body = cfg.codeType === 'qr'
-              ? `<div class="cdi" style="width:${qMm.toFixed(1)}mm;height:${qMm.toFixed(1)}mm">${BBCodes.qrSvg(code, { ecc: 'M', quiet: 1 })}</div>`
-              : `<div class="cdi" style="width:${wMm.toFixed(1)}mm;height:${cfg.codeH}mm">${BBCodes.code128Svg(code, { h: 40 })}</div>`;
-          } catch (e) { body = `<div class="sm">কোড বানানো যায়নি</div>`; }
+              ? `<div class="lcdi" style="width:${qMm.toFixed(1)}mm;height:${qMm.toFixed(1)}mm">${BBCodes.qrSvg(code, { ecc: 'M', quiet: 1 })}</div>`
+              : `<div class="lcdi" style="width:${wMm.toFixed(1)}mm;height:${cfg.codeH}mm">${BBCodes.code128Svg(code, { h: 40 })}</div>`;
+          } catch (e) { body = `<div class="lsm">কোড বানানো যায়নি</div>`; }
           const al = { left: 'flex-start', center: 'center', right: 'flex-end' }[cfg.codeAlign] || 'center';
-          return `<div class="cd" style="align-items:${al}">${body}${cfg.showCid ? `<div class="cid" style="align-self:stretch">${esc(code)}</div>` : ''}</div>`;
+          return `<div class="lcd" style="align-items:${al}">${body}${cfg.showCid ? `<div class="lcid" style="align-self:stretch">${esc(code)}</div>` : ''}</div>`;
         }
-        case 'who': return `<div><div class="nm">${esc(o.customer || '')}</div><div class="ph">${esc(o.phone || '')}</div></div>`;
-        case 'addr': return o.address ? `<div class="ad">${esc(o.address)}</div>` : '';
-        case 'cod': return it.cod > 0 ? `<div class="cod">COD: ${money(it.cod)}</div>` : `<div class="pd">PAID / প্রি-পেইড</div>`;
-        case 'items': return itemsText(o) ? `<div class="sm">${itemsText(o)}</div>` : '';
-        case 'note': return (o.source || o.note) ? `<div class="sm">${esc([o.source, o.note].filter(Boolean).join(' · '))}</div>` : '';
+        case 'who': return `<div><div class="lnm">${esc(o.customer || '')}</div><div class="lph">${esc(o.phone || '')}</div></div>`;
+        case 'addr': return o.address ? `<div class="lad">${esc(o.address)}</div>` : '';
+        case 'cod': return it.cod > 0 ? `<div class="lcod">COD: ${money(it.cod)}</div>` : `<div class="lpd">PAID / প্রি-পেইড</div>`;
+        case 'items': return itemsText(o) ? `<div class="lsm">${itemsText(o)}</div>` : '';
+        case 'note': return (o.source || o.note) ? `<div class="lsm">${esc([o.source, o.note].filter(Boolean).join(' · '))}</div>` : '';
       } return '';
     }).join('');
     return `<div class="blbl${cfg.border ? ' bdr' : ''}" style="width:${W}mm;height:${H}mm;font-size:${cfg.font}pt">${parts}</div>`;

@@ -54,7 +54,7 @@ async function pushNotify(m, onlyMe) {                         // fire-and-forge
 }
 function pushChat(m) {
   const room = m.orderId ? '#' + ((S.orders[m.orderId] || {}).no || '') : roomName(m.room || 'g1');
-  const body = m.imgId ? '📷 ছবি পাঠিয়েছে' : m.card ? '📦 অর্ডার #' + ((m.snap || {}).no || '') + (m.text ? ' — ' + m.text : '') : (m.text || '');
+  const body = m.voice ? '🎤 ভয়েস মেসেজ পাঠিয়েছে' : m.imgId ? '📷 ছবি পাঠিয়েছে' : m.card ? '📦 অর্ডার #' + ((m.snap || {}).no || '') + (m.text ? ' — ' + m.text : '') : (m.text || '');
   const ms = m.mentions || [];
   pushNotify({ title: `💬 ${m.name || 'টিম'} · ${room}`, body, url: '#chat', tag: 'chat-' + (m.orderId || m.room || 'g1'), exclude: ms });
   if (ms.length) pushNotify({ title: `🔔 ${m.name || 'কেউ'} আপনাকে ট্যাগ করেছে · ${room}`, body, url: '#chat', tag: 'mention-' + m.id, force: true, only: ms });   // tagged people get their own, louder notification

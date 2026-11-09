@@ -1,6 +1,6 @@
 {
-  "name": "BlashBerry Shop Manager",
-  "short_name": "BlashBerry",
+  "name": "BiM Manager",
+  "short_name": "BiM Manager",
   "lang": "bn",
   "start_url": "./index.html",
   "scope": "./",

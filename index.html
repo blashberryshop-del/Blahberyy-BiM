@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap">
-<title>BlashBerry</title>
+<title>BiM Manager</title>
 <style>
 :root{
   --b:#157f3b;--b2:#27a554;--side:#0b4a2d;--sidehi:#1f9d4d;--bg:#eaf2ec;--bgimg:linear-gradient(160deg,#e3f0e7,#f4f9f5 55%,#e1eee5);--card:#fff;--txt:#1c2a21;--mut:#6a7b70;--line:#e2ebe4;--soft:#e5f4ea;--soft2:#eef4ef;
@@ -76,7 +76,8 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 /* order cards, badges */
 .oc{background:var(--card);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;box-shadow:var(--sh);cursor:pointer;border:1.5px solid transparent}.oc.selc{border-color:var(--b);background:var(--soft)}
 .oc.chk{display:flex;gap:10px;align-items:flex-start}
-.oh{display:flex;justify-content:space-between;align-items:center;gap:8px}.os{font-size:12.5px;color:var(--mut);margin:3px 0;word-break:break-word}.oact{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.oh{display:flex;justify-content:space-between;align-items:center;gap:8px}.os{font-size:12.5px;color:var(--mut);margin:3px 0;word-break:break-word}.oact{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}.oact-r{margin-left:auto}.omore{border-top:1px dashed var(--line);margin-top:8px;padding-top:2px}.omore .oact:first-child{margin-top:8px}.os.by{margin-top:8px}
+.ohr{display:flex;align-items:center;gap:6px}.oc-tg{border:1px solid var(--line);background:var(--soft2);color:var(--b);width:32px;height:28px;border-radius:9px;font-size:15px;line-height:1;cursor:pointer;transition:transform .2s}.oc-tg.open{transform:rotate(180deg)}
 .bd{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
 .b-gray{background:var(--grayb);color:var(--gray)}.b-blue{background:var(--infob);color:var(--info)}.b-amber{background:var(--amb);color:var(--amt)}.b-green{background:var(--okb);color:var(--ok)}.b-red{background:var(--errb);color:var(--err)}.b-orange{background:var(--warnb);color:var(--warn)}
 .tag{display:inline-block;background:var(--soft2);color:var(--mut);border-radius:8px;padding:1px 8px;font-size:11.5px;margin-right:4px}
@@ -135,6 +136,10 @@ textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;min-h
 .rq{border-left:3px solid var(--b);background:var(--soft2);border-radius:6px;padding:3px 8px;font-size:12.5px;margin:3px 0;color:var(--mut)}.fw{font-size:11.5px;color:var(--mut);font-style:italic}
 .rx{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rx button{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:1px 8px;font-size:12.5px;cursor:pointer;color:var(--txt)}.rx button.on{border-color:var(--b);background:var(--soft2)}
 .cm.flash .cb{outline:2px solid var(--b)}
+#roomtabs{position:sticky;top:0;z-index:6;background:var(--bg);margin:0 -4px;padding:2px 4px 4px}#roomtabs .chips{margin:4px 0}
+.vbar{display:flex;align-items:center;gap:10px;width:100%;margin-bottom:6px;padding:6px 10px;border-radius:10px;background:rgba(229,57,53,.14);font-size:13.5px}.vbar.hide{display:none}.vbar .rec{width:10px;height:10px;border-radius:50%;background:#e53935;animation:blink 1s infinite}.vbar .sp{flex:1}
+@keyframes blink{50%{opacity:.25}}
+.vm{display:flex;align-items:center;gap:10px;min-width:170px;cursor:pointer}.vm .vp{width:36px;height:36px;border-radius:50%;border:0;background:var(--b);color:#fff;font-size:15px;cursor:pointer}.vm .vw{flex:1;height:4px;border-radius:2px;background:var(--line);position:relative;overflow:hidden}.vm .vw i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--b)}.vm .vd{font-size:12.5px;color:var(--mut)}
 .mnpop{position:absolute;left:8px;right:8px;bottom:100%;margin-bottom:4px;max-height:200px;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.35);z-index:30}.mnpop.hide{display:none}
 .mni{display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer;font-size:14.5px}.mni:hover,.mni:active{background:var(--soft2)}.mni .av{width:26px;height:26px;border-radius:50%;background:var(--b);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
 .mn{color:var(--b);font-weight:700}.mn.you{background:rgba(255,200,40,.25);border-radius:5px;padding:0 3px;color:inherit}
@@ -171,7 +176,7 @@ textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;min-h
   #app{max-width:1320px;display:grid;grid-template-columns:232px 1fr;grid-template-rows:auto 1fr;height:100%}
   #nav{position:static;grid-column:1;grid-row:1/3;flex-direction:column;justify-content:flex-start;gap:6px;padding:22px 14px;margin:14px 0 14px 14px;border-radius:26px;box-shadow:0 14px 34px rgba(11,74,45,.3)}
   #nav:after{content:"© MD NURNABI";margin-top:auto;color:rgba(255,255,255,.55);font-size:11.5px;padding:10px 12px}
-  #nav:before{content:"BlashBerry";color:#fff;font-weight:700;font-size:20px;letter-spacing:.3px;padding:4px 12px 18px}
+  #nav:before{content:"BiM Manager";color:#fff;font-weight:700;font-size:20px;letter-spacing:.3px;padding:4px 12px 18px}
   #nav button{flex:none;flex-direction:row;gap:12px;padding:6px 8px;font-size:14.5px;justify-content:flex-start;border-radius:14px;text-align:left}
   #nav button .pill{width:auto;height:auto;background:none;box-shadow:none;padding:0}
   #nav button.on{background:var(--sidehi);box-shadow:0 4px 12px rgba(0,0,0,.25)}#nav button.on .pill{background:none;box-shadow:none}
@@ -205,7 +210,7 @@ textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;min-h
 </head>
 <body>
 <div id="app">
-  <div id="top"><div class="logo">BB</div><div class="tt" id="shopname">BlashBerry</div><div id="sync"><i style="background:#9e9e9e"></i>লোকাল</div><button class="tb" id="chatbtn" aria-label="টিম চ্যাট" style="display:none;position:relative" onclick="A.nav('chat')"></button><button class="tb" id="gearbtn" aria-label="সেটিংস" onclick="A.settings()"></button></div>
+  <div id="top"><div class="logo">BM</div><div class="tt" id="shopname">BiM Manager</div><div id="sync"><i style="background:#9e9e9e"></i>লোকাল</div><button class="tb" id="chatbtn" aria-label="টিম চ্যাট" style="display:none;position:relative" onclick="A.nav('chat')"></button><button class="tb" id="gearbtn" aria-label="সেটিংস" onclick="A.settings()"></button></div>
   <div id="main"></div>
   <button id="fab" aria-label="নতুন যোগ করুন" onclick="A.fab()"></button>
   <div id="chatdock" class="hide"></div>

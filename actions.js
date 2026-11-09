@@ -13,6 +13,10 @@ const A = {
     if (price) p.value = Math.round(price);
   },
   addLine(mode, ret) { $('#lines').insertAdjacentHTML('beforeend', lineRow({}, mode, ret)); },
+  tgl(id) {                                            // open/close the extra buttons of ONE card, in place (no re-render, scroll stays); remembered until you close it
+    if (OPEN.has(id)) OPEN.delete(id); else OPEN.add(id); saveExp();
+    const el = document.getElementById('oc_' + id), row = R.onl.find(x => x.o.id === id); if (el && row) { const t = document.createElement('div'); t.innerHTML = orderCard(row); el.replaceWith(t.firstElementChild); }
+  },
   f(k, v) { view[k] = v; if (k === 'cst' || k === 'cf') view.cmax = 0; render(); },
   tab(k, v) { view[k] = v; render(); },
   range(r) { view.range = r; render(); },
@@ -39,6 +43,7 @@ const A = {
     const o = S.orders[id]; if (!o) return; if (!can('orders_status')) return toast('কল-অবস্থা বদলের অনুমতি নেই');
     if (k === 'ok' && o.status === 'Pending' && !itemsOk(o)) return A.needItems(o, true);
     if (k === 'sched' || k === 'later') return A.callSheet(id, k);
+    if (k === 'ok' && o.status === 'Pending' && !confirm(`#${o.no} ${o.customer || ''}\nকল করে কনফার্ম পেয়েছেন? কনফার্ম করলে অর্ডার কুরিয়ার পেজে (Entry) চলে যাবে।`)) return;   // two-step: a stray tap must not move the order
     if (k === 'cancel' && !confirm(`#${o.no} ${o.customer || ''} — কাস্টমার ক্যানসেল চেয়েছে?\nঅর্ডার ক্যানসেল হয়ে যাবে (স্টক ফিরে আসবে)।`)) return;
     A.callSet(id, k, {});
   },
@@ -65,6 +70,7 @@ const A = {
     if (!id && !ed) return toast('অর্ডার যোগের অনুমতি নেই');
     const body = (id && can('orders_status') ? `<div class="chips">${ST.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="if(A.status('${id}','${s}')!==false)closeSheet()">${STBN[s]}</button>`).join('')}</div>` : '') +
       (id && can('orders_status') ? `<div class="lbl">📞 কনফার্মেশন কলের ফলাফল</div><div class="chips">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" onclick="closeSheet();A.call('${id}','${k}')">${CALLS[k][0]} ${CALLS[k][1]}</button>`).join('')}</div>${o.call ? `<div class="os">${callLine(o)}</div>` : ''}` : '') +
+      (id && o.by ? `<div class="os">👤 অর্ডার যোগ করেছেন: <b>${esc(o.by)}</b>${o.byAt ? ' · ' + fmtDT(o.byAt) : ''}</div>` : '') +
       (id ? `<div class="btnrow" style="margin:4px 0 8px"><button class="btn ghost sm" onclick="A.forward('${id}')">${ico('up', 14)} টিম গ্রুপে পাঠান</button><button class="btn ghost sm" onclick="A.thread('${id}')">💬 এই অর্ডার নিয়ে আলোচনা${typeof chatCount === 'function' && chatCount(id) ? ' (' + chatCount(id) + ')' : ''}</button></div>` : '') +
       fld('date', 'তারিখ', 'date', o.date, 0, dis) + fld('customer', 'কাস্টমার', 'text', o.customer, 0, dis) + fld('phone', 'ফোন', 'tel', o.phone, 0, dis) + `<div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn sm" onclick="A.dialIn('phone')">${ico('phone', 14)} কল করুন</button><button type="button" class="btn ghost sm" onclick="A.cpIn('phone','নম্বর')">${ico('copy', 14)} নম্বর কপি</button>${id ? `<button type="button" class="btn ghost sm" onclick="A.fraud('${id}')">${ico('shield', 14)} ফ্রড চেক</button>` : ''}</div>` + fld('address', 'ঠিকানা', 'textarea', o.address, 0, `${dis} oninput="A.autoArea()"`) +
       `<div class="row2">${fld('source', 'সোর্স', 'select', normSource(o.source), srcOpts(o.source), dis)}${fld('area', 'জেলা (ঠিকানা থেকে অটো বসে)', 'text', o.area || areaOf(o.address).district, 0, `${dis} data-man="${o.area && o.area !== areaOf(o.address).district ? 1 : 0}" oninput="this.dataset.man=1"`)}</div>` +
@@ -82,14 +88,14 @@ const A = {
       const v = vals(d); if (!v.customer && !v.phone) { toast('নাম বা ফোন দিন'); return false; }
       const its = readLines(d); if ((v.status === 'Confirmed' || v.status === 'Shipped') && v.status !== o.status && !its.length) { toast('⚠ আইটেম ও পরিমাণ না দিলে "' + STBN[v.status] + '" করা যাবে না'); return false; }
       if (!id && v.phone && live(S, 'orders').some(x => x.phone === v.phone && x.date === v.date && x.status !== 'Cancelled') && !confirm(`এই নম্বরে (${v.phone}) একই তারিখে আগেই অর্ডার আছে।\nতবুও সেভ করবেন?`)) return false;
-      v.source = normSource(v.source); if (v.status === 'Cancelled' && !v.cancelType && !o.cancelType) v.cancelType = (v.tracking || o.tracking) ? 'courier' : 'call'; Object.assign(o, v, { items: its, no: o.no || nextNo() }); save('orders', o);
+      v.source = normSource(v.source); if (v.status === 'Cancelled' && !v.cancelType && !o.cancelType) v.cancelType = (v.tracking || o.tracking) ? 'courier' : 'call'; Object.assign(o, v, { items: its, no: o.no || nextNo() }); if (!o.by) { o.by = (profile && profile.name) || ''; o.byAt = Date.now(); } save('orders', o);
     } : null);
   },
   quick(text) {
     const body = `<button class="btn ghost sm" onclick="A.clip()">${ico('list', 16)} ক্লিপবোর্ড থেকে নিন</button>${fld('t', 'কাস্টমারের মেসেজ paste করুন', 'textarea', text || '')}<div id="qprev"></div>`;
     const mk = d => {
       const v = vals(d.querySelector('#qprev')); if (!v.name && !v.phone) { toast('আগে মেসেজ paste করুন'); return false; }
-      const o = { date: today(), status: 'Pending', pay: 'Cash on Delivery', customer: v.name, phone: v.phone, address: v.address, bill: v.bill, source: normSource(v.source), area: areaOf(v.address).district || '', note: v.note, items: [], no: nextNo() };
+      const o = { date: today(), status: 'Pending', pay: 'Cash on Delivery', customer: v.name, phone: v.phone, address: v.address, bill: v.bill, source: normSource(v.source), area: areaOf(v.address).district || '', note: v.note, items: [], no: nextNo(), by: (profile && profile.name) || '', byAt: Date.now() };
       if (v.phone && live(S, 'orders').some(x => x.phone === v.phone && x.date === o.date && x.status !== 'Cancelled') && !confirm(`এই নম্বরে (${v.phone}) আজকেই আরেকটা অর্ডার আছে।\nতবুও সেভ করবেন?`)) return false;
       save('orders', o); toast(`✓ অর্ডার #${o.no} যোগ হলো`); return o;
     };

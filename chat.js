@@ -27,7 +27,7 @@ const chatUnread = () => {
   const s = seenIds(); if (!s) { if (chatAll().length) markAll(); return 0; }       // first run on this device: existing history is not "new"
   return chatAll().filter(m => m.uid !== SY.uid && !s.has(m.id)).length;
 };
-const hhmm = t => t ? new Date(t).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+const hhmm = t => fmtDT(t);
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; };
 const curRoom = () => roomList().includes(view.chatRoom) ? view.chatRoom : 'g1';
 
@@ -70,7 +70,7 @@ function chatPost(extra) {
   const rec = Object.assign({ id: uid(), t: Date.now(), uid: SY.uid, name: (profile && profile.name) || '', text: '' }, extra);
   put('chat', rec); markAll(); if (typeof pushChat === 'function') pushChat(rec); return rec;
 }
-const msgPreview = m => m.thumb && !m.text ? '📷 ছবি' : m.card ? `📦 অর্ডার #${(m.snap && m.snap.no) || ''} ${(m.snap && m.snap.customer) || ''}` : clip(m.text, 70);
+const msgPreview = m => m.voice ? '🎤 ভয়েস মেসেজ' : m.thumb && !m.text ? '📷 ছবি' : m.card ? `📦 অর্ডার #${(m.snap && m.snap.no) || ''} ${(m.snap && m.snap.customer) || ''}` : clip(m.text, 70);
 function reactHtml(m) {
   const r = m.react || {}, by = {}; Object.keys(r).forEach(u => { if (r[u]) (by[r[u]] = by[r[u]] || []).push(u); });
   const k = Object.keys(by); if (!k.length) return '';
@@ -80,6 +80,7 @@ function chatBubble(m) {
   const mine = m.uid === SY.uid; let body = '';
   if (m.fwd) body += `<div class="fw">↪ ফরোয়ার্ড${m.fwd.name ? ': ' + esc(m.fwd.name) : ''}</div>`;
   if (m.reply) body += `<div class="rq" onclick="event.stopPropagation();A.jump('${m.reply.id}')"><b>${esc(m.reply.name || '')}</b> ${esc(m.reply.text || '')}</div>`;
+  if (m.voice) body += `<div class="vm" onclick="event.stopPropagation();A.voicePlay('${m.id}')"><button class="vp" id="vp_${m.id}">▶</button><div class="vw"><i id="vw_${m.id}"></i></div><span class="vd">${vtime(m.voice)}</span></div>`;
   if (m.thumb) body += `<img class="cimg" alt="ছবি" src="${m.thumb}" onclick="event.stopPropagation();A.viewImg('${m.id}')">`;
   if (m.card) {
     const x = S.orders[m.orderId], o = x && !x._d ? x : null, sn = m.snap || {}, r = o && R && R.O ? R.O[o.id] : null;
@@ -119,7 +120,7 @@ function chatDock(on, fresh) {
   const d = $('#chatdock'), m = $('#main'); if (!d) return;
   if (!on) { d.classList.add('hide'); d.innerHTML = ''; d.style.bottom = ''; if (m) m.style.paddingBottom = ''; return; }
   if (fresh || !d.innerHTML) {
-    d.innerHTML = `<div id="mnpop" class="mnpop hide"></div><div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><button class="btn ghost sm" onclick="A.imgPick('')" title="ছবি পাঠান">📷</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value;A.typing(this)" onclick="mentionCheck(this)">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div>`;
+    d.innerHTML = `<div id="mnpop" class="mnpop hide"></div><div id="vbar" class="vbar hide"></div><div id="rbar">${replyBar('reply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.chatAttach()" title="অর্ডার যুক্ত করুন">📎</button><button class="btn ghost sm" onclick="A.imgPick('')" title="ছবি পাঠান">📷</button><button class="btn ghost sm" onclick="A.voiceStart('')" title="ভয়েস পাঠান">🎤</button><textarea id="chin" rows="1" placeholder="${esc(roomName(curRoom()))} — মেসেজ লিখুন…" oninput="view.chatDraft=this.value;A.typing(this)" onclick="mentionCheck(this)">${esc(view.chatDraft || '')}</textarea><button class="btn sm" onclick="A.chatSend()">পাঠান</button></div>`;
   }
   rosterSync(); d.classList.remove('hide'); const ci = $('#chin'); if (fresh && ci) autosize0(ci);
   dockPad(false); dockWatch();
@@ -232,7 +233,7 @@ Object.assign(A, {
   thread(id) {
     const o = S.orders[id]; if (!o) return; if (!chatOn()) return toast('টিম চ্যাটের জন্য ক্লাউড সিঙ্ক চালু থাকতে হবে');
     view.thread = id; markSeen('t');
-    const d = sheet(`💬 #${o.no} ${esc(o.customer || '')} — আলোচনা`, `<div id="thlist" class="thlist">${threadHtml(id)}</div><div class="chatbar" style="position:relative"><div id="mnpop2" class="mnpop hide"></div><div id="thrbar">${replyBar('thReply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.imgPick('${id}')" title="ছবি পাঠান">📷</button><textarea id="thin" rows="1" placeholder="এই অর্ডার নিয়ে লিখুন…" oninput="A.typing(this)" onclick="mentionCheck(this)"></textarea><button class="btn sm" onclick="A.threadSend('${id}')">পাঠান</button></div></div>`);
+    const d = sheet(`💬 #${o.no} ${esc(o.customer || '')} — আলোচনা`, `<div id="thlist" class="thlist">${threadHtml(id)}</div><div class="chatbar" style="position:relative"><div id="mnpop2" class="mnpop hide"></div><div id="vbar2" class="vbar hide"></div><div id="thrbar">${replyBar('thReply')}</div><div class="cbrow"><button class="btn ghost sm" onclick="A.imgPick('${id}')" title="ছবি পাঠান">📷</button><button class="btn ghost sm" onclick="A.voiceStart('${id}')" title="ভয়েস পাঠান">🎤</button><textarea id="thin" rows="1" placeholder="এই অর্ডার নিয়ে লিখুন…" oninput="A.typing(this)" onclick="mentionCheck(this)"></textarea><button class="btn sm" onclick="A.threadSend('${id}')">পাঠান</button></div></div>`);
     const mo = new MutationObserver(() => { if (!document.body.contains(d)) { if (view.thread === id && !$('#sheet')) view.thread = null; mo.disconnect(); } }); mo.observe(document.body, { childList: true });
     const t = $('#thlist'); if (t) t.scrollTop = t.scrollHeight; chatBadge();
   },
@@ -327,3 +328,50 @@ async function chatCleanup(force) {
 setInterval(() => { try { chatCleanup(); } catch (e) { } }, 30 * 60 * 1000);
 
 window.mentionCheck = mentionCheck;
+
+/* ---------- voice messages: recorded in the phone (small opus clip, ≤90 s), stored like a photo (fetched only when played), auto-removed with the chat ---------- */
+const vtime = s => Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0');
+let REC = null, PLAYER = null;
+function voiceUi(orderId, on) {
+  const e = $(orderId ? '#vbar2' : '#vbar'); if (!e) return;
+  if (!on) { e.classList.add('hide'); e.innerHTML = ''; return; }
+  e.innerHTML = `<span class="rec"></span><span>রেকর্ড হচ্ছে <b id="vt">0:00</b></span><span class="sp"></span><button class="btn ghost sm" onclick="A.voiceStop(false)">বাতিল</button><button class="btn sm" onclick="A.voiceStop(true)">পাঠান ➤</button>`; e.classList.remove('hide');
+}
+Object.assign(A, {
+  async voiceStart(orderId) {
+    if (REC) return; if (!chatOn() || !SY.db) return toast('টিম চ্যাটের জন্য ক্লাউড সিঙ্ক চালু থাকতে হবে');
+    if (!navigator.mediaDevices || !window.MediaRecorder) return toast('এই ব্রাউজারে ভয়েস রেকর্ড চলে না');
+    let st; try { st = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { return toast('মাইক্রোফোনের অনুমতি দিন (ব্রাউজারের সাইট সেটিংসে Microphone → Allow)'); }
+    const mt = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const rc = new MediaRecorder(st, Object.assign({ audioBitsPerSecond: 24000 }, mt ? { mimeType: mt } : {})), ch = [];
+    rc.ondataavailable = e => { if (e.data && e.data.size) ch.push(e.data); };
+    const r = REC = { rc, st, ch, t0: Date.now(), orderId: orderId || '', mt: rc.mimeType || mt, send: false, timer: null };
+    rc.onstop = () => { clearInterval(r.timer); r.st.getTracks().forEach(t => t.stop()); REC = null; voiceUi(r.orderId, false); if (r.send) A.voiceSend(r); };
+    rc.start(); voiceUi(r.orderId, true);
+    r.timer = setInterval(() => { const s = (Date.now() - r.t0) / 1000, e = document.getElementById('vt'); if (e) e.textContent = vtime(s); if (s >= 90) A.voiceStop(true); }, 400);
+  },
+  voiceStop(send) { if (!REC) return; REC.send = !!send; try { REC.rc.stop(); } catch (e) { REC.st.getTracks().forEach(t => t.stop()); REC = null; } },
+  async voiceSend(r) {
+    const dur = (Date.now() - r.t0) / 1000; if (dur < 1) return toast('রেকর্ড খুব ছোট');
+    const blob = new Blob(r.ch, { type: r.mt || 'audio/webm' }); if (blob.size > 650000) return toast('রেকর্ড বেশি বড় — ছোট করে বলুন');
+    const data = await new Promise(res => { const f = new FileReader(); f.onload = () => res(f.result); f.readAsDataURL(blob); }), id = uid(), t = Date.now();
+    try { await SY.db.collection(`shops/${SY.shop}/chatImages`).doc(id).set({ id, t, uid: SY.uid, data, kind: 'audio' }); } catch (e) { return toast('ভয়েস পাঠানো যায়নি: ' + (e.message || '')); }
+    IMGCACHE[id] = data; const x = { id, t, text: '', voice: Math.max(1, Math.round(dur)), imgId: id }; if (r.orderId) x.orderId = r.orderId; else x.room = curRoom();
+    chatPost(x); chatRefresh(); if (!r.orderId) scrollEnd(); toast('✓ ভয়েস পাঠানো হয়েছে');
+  },
+  async voicePlay(mid) {
+    const m = S.chat[mid]; if (!m) return; const btn = () => document.getElementById('vp_' + mid), bar = () => document.getElementById('vw_' + mid);
+    if (PLAYER && PLAYER.mid === mid) { PLAYER.a.pause(); PLAYER = null; if (btn()) btn().textContent = '▶'; return; }
+    if (PLAYER) { PLAYER.a.pause(); const ob = document.getElementById('vp_' + PLAYER.mid); if (ob) ob.textContent = '▶'; PLAYER = null; }
+    let data = IMGCACHE[m.imgId];
+    if (!data) {
+      if (btn()) btn().textContent = '…';
+      try { const ds = await SY.db.collection(`shops/${SY.shop}/chatImages`).doc(m.imgId).get(); if (ds.exists) data = IMGCACHE[m.imgId] = ds.data().data; } catch (e) { }
+      if (!data) { if (btn()) btn().textContent = '▶'; return toast('ভয়েসটা আনা যায়নি (মেয়াদ শেষে মুছে গেছে বা ইন্টারনেট নেই)'); }
+    }
+    const a = new Audio(data); PLAYER = { mid, a };
+    a.ontimeupdate = () => { const b = bar(); if (b && a.duration) b.style.width = Math.min(100, a.currentTime / a.duration * 100) + '%'; };
+    a.onended = a.onerror = () => { if (btn()) btn().textContent = '▶'; const b = bar(); if (b) b.style.width = '0'; if (PLAYER && PLAYER.mid === mid) PLAYER = null; };
+    try { await a.play(); if (btn()) btn().textContent = '⏸'; } catch (e) { PLAYER = null; if (btn()) btn().textContent = '▶'; toast('এই ফোনে ভয়েসটা চালানো গেল না'); }
+  }
+});

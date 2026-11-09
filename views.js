@@ -81,13 +81,16 @@ const NEXT = { Pending: ['Confirmed', 'কনফার্ম'], Confirmed: ['Shi
 function orderRows() {
   const q = (view.oq || '').toLowerCase().trim(), f = view.of || 'all', inr = inR(view.orange || 'all'), drill = !!(view.osrc || view.odist || view.oloc);
   const every = !!q || drill;     // a search or a report drill-down looks at every order; otherwise this page only holds orders not yet sent to the Courier page
-  return R.onl.filter(({ o }) => (every || !cStage(o)) && (!drill || f === 'all' || o.status === f) && callMatch(o, view.ocall) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
-    (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => (view.ocall === 'sched' || view.ocall === 'later') ? String(a.o.callDate || '').localeCompare(String(b.o.callDate || '')) || n(a.o.no) - n(b.o.no) : n(b.o.no) - n(a.o.no));
+  return R.onl.filter(({ o }) => (every || !cStage(o)) && (!drill || f === 'all' || o.status === f) && callMatch(o, ocNow()) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
+    (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => (ocNow() === 'sched' || ocNow() === 'later') ? String(a.o.callDate || '').localeCompare(String(b.o.callDate || '')) || n(a.o.no) - n(b.o.no) : n(b.o.no) - n(a.o.no));
 }
 const fdBtn = o => o.phone ? `<button class="qb fd fd-${fraudLevel(o)}" aria-label="ফ্রড চেক" title="ফ্রড চেক" onclick="event.stopPropagation();A.fraud('${o.id}')">${ico('shield', 14)}</button>` : '';
+const OPEN = (() => { try { return new Set(JSON.parse(localStorage.bb_exp || '[]')); } catch (e) { return new Set(); } })();
+const saveExp = () => { try { localStorage.bb_exp = JSON.stringify([...OPEN].slice(-200)); } catch (e) { } };
 function orderCard({ o, r }) {
-  const sm = !!view.sel, on = sm && view.sel[o.id], dist = dKey(o), src = normSource(o.source), stg = cStage(o), stt = can('orders_status'), acts = [];
+  const sm = !!view.sel, on = sm && view.sel[o.id], dist = dKey(o), src = normSource(o.source), stg = cStage(o), stt = can('orders_status'), acts = [], open = !sm && OPEN.has(o.id);
   const btn = (cls, js, ic, txt) => `<button class="btn sm ${cls}" onclick="event.stopPropagation();${js}">${ico(ic, 14)} ${txt}</button>`;
+  let lbl = '';
   if (!sm && can('orders_view')) {
     if (o.status === 'Pending') { if (stt) acts.push(btn('', `A.confirm('${o.id}')`, 'check', 'কনফার্ম')); }
     else if (stg === 'entry') {
@@ -97,13 +100,16 @@ function orderCard({ o, r }) {
         if (stt) acts.push(btn(canBook(o) ? 'ghost' : '', `A.status('${o.id}','Shipped')`, 'truck', canBook(o) ? 'শিপড (হাতে)' : 'শিপড'));
       }
     } else if (o.status === 'Shipped' && stt) acts.push(btn('', `A.status('${o.id}','Delivered')`, 'check', 'ডেলিভারড'));
-    acts.push(btn('ghost', `A.labelSheet(['${o.id}'])`, 'printer', 'লেবেল'));
+    lbl = btn('ghost', `A.labelSheet(['${o.id}'])`, 'printer', 'লেবেল');       // label button on the RIGHT, so the frequent buttons on the left are not hit by mistake
   }
-  return `<div class="oc ${stg ? 'oc-cur st-' + stg : 'oc-ord'} ${on ? 'selc' : ''}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div>` +
+  const more = (acts.length || lbl ? `<div class="oact">${acts.join('')}<span class="oact-r">${lbl}</span></div>` : '') +
+    (!sm && o.status === 'Pending' && stt ? `<div class="ccall">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" title="${CALLS[k][1]}" onclick="event.stopPropagation();A.call('${o.id}','${k}')">${CALLS[k][0]}${o.call === k ? '' : ' <small>' + CALLS[k][1] + '</small>'}</button>`).join('')}</div>` : '') +
+    (o.by ? `<div class="os by">👤 যোগ করেছেন: <b>${esc(o.by)}</b>${o.byAt ? ' · ' + fmtDT(o.byAt) : ''}</div>` : '');
+  const tg = !sm && more ? `<button class="oc-tg${open ? ' open' : ''}" aria-label="বিস্তারিত" onclick="event.stopPropagation();A.tgl('${o.id}')">▾</button>` : '';
+  return `<div class="oc ${stg ? 'oc-cur st-' + stg : 'oc-ord'} ${on ? 'selc' : ''}" id="oc_${o.id}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b><span class="ohr">${badge(o.status)}${tg}</span></div>` +
     `<div class="os">${esc(o.phone || '')}${qbs(o.phone)}${fdBtn(o)} · ${fmtD(o.date)}</div><div class="os">${stg ? `<span class="stg stg-${stg}">${stageName(stg)}</span>` : ''}${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` +
     `<div class="oh"><span><b>${money(r.total)}</b>${r.noItems ? ' <small class="warn">⚠ আইটেম নেই</small>' : ''}</span><span class="${r.cod || r.due > 0 ? 'rd' : 'gr'}">${r.cod ? 'COD ' + money(r.cod) : r.due > 0 ? 'বাকি ' + money(r.due) : r.paid >= r.total && r.total ? '✓ পেইড' : ''}</span></div>` +
-    (acts.length ? `<div class="oact">${acts.join('')}</div>` : '') +
-    (!sm && o.status === 'Pending' && stt ? `<div class="ccall">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" title="${CALLS[k][1]}" onclick="event.stopPropagation();A.call('${o.id}','${k}')">${CALLS[k][0]}${o.call === k ? '' : ' <small>' + CALLS[k][1] + '</small>'}</button>`).join('')}</div>` : '') + `</div>`;
+    (open ? `<div class="omore">${more}</div>` : '') + `</div>`;
 }
 function orderListHtml() {
   const L = orderRows(), tot = L.length, show = L.slice(0, view.omax || 60); view.visible = show.map(x => x.o.id);
@@ -116,11 +122,11 @@ function vOrders() {
   const f = view.of || 'all', drill = !!(view.osrc || view.odist || view.oloc), base = R.onl.filter(x => !cStage(x.o));
   const fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'এলাকা: ' + view.oloc], drill && f !== 'all' && ['of', 'স্ট্যাটাস: ' + (STBN[f] || f)], view.orange && view.orange !== 'all' && ['orange', RANGES.find(x => x[0] === view.orange)[1]]].filter(Boolean);
   const sm = !!view.sel, cnt = sm ? Object.keys(view.sel).length : 0;
-  const callChips = [['', 'সব'], ['todo', '📞 কল বাকি'], ...Object.keys(CALLS).filter(k => k !== 'ok').map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল']];
+  const callChips = [['todo', '📞 কল বাকি'], ...Object.keys(CALLS).filter(k => k !== 'ok').map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল'], ['', 'সব']];
   return (sm ? `<div class="selbar"><b>${cnt} টা সিলেক্ট</b><button class="btn sm" onclick="A.selLabel()">${ico('printer', 14)} লেবেল</button>${can('orders_status') ? '<button class="btn sm ghost" onclick="A.selStatus()">স্ট্যাটাস</button>' : ''}<button class="btn sm ghost" onclick="A.selAll()">সব</button><button class="btn sm ghost" onclick="A.selMode()">বাতিল</button></div>` : '') +
     head('অনলাইন অর্ডার', `${can('orders_view') ? `<button class="btn sm ghost" onclick="A.selMode()">${ico('check', 14)} সিলেক্ট</button>` : ''}${can('orders_edit') ? `<button class="btn sm" onclick="A.quick()">${ico('bolt', 14)} কুইক</button>` : ''}`) +
     `<input class="search" placeholder="নাম / ফোন / অর্ডার নং / কনসাইনমেন্ট / সোর্স" value="${esc(view.oq || '')}" oninput="view.oq=this.value;A.olist()">` +
-    `<div class="chips sc"><span class="muted" style="align-self:center">কল:</span>${callChips.map(([k, l]) => { const c = k ? base.filter(x => callMatch(x.o, k)).length : base.length; return `<button class="chip ${(view.ocall || '') === k ? 'on' : ''}" onclick="A.f('ocall','${k}')">${l} <small>${c}</small></button>`; }).join('')}</div>` +
+    `<div class="chips sc"><span class="muted" style="align-self:center">কল:</span>${callChips.map(([k, l]) => { const c = k ? base.filter(x => callMatch(x.o, k)).length : base.length; return `<button class="chip ${(ocNow() || '') === k ? 'on' : ''}" onclick="A.f('ocall','${k}')">${l} <small>${c}</small></button>`; }).join('')}</div>` +
     (fl.length ? `<div class="chips">${fl.map(([k, l]) => `<button class="chip on" onclick="view.${k}=null;render()">${esc(l)} ✕</button>`).join('')}</div>` : '') + `<div id="olist">${orderListHtml()}</div>`;
 }
 
@@ -131,21 +137,23 @@ function cqCard({ o, r }) {
   return `<div class="oc ${cStage(o) ? 'oc-cur st-' + cStage(o) : 'oc-ord'}" onclick="A.order('${o.id}')"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b>${badge(o.status)}</div><div class="os">${esc(o.phone || '')}${qbs(o.phone)} · ${esc(o.courier || '—')} · ${esc(o.tracking || 'কনসাইনমেন্ট নেই')}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? ' · <b>' + esc(CST[o.cstatus] || o.cstatus) + '</b>' : ''}</div><div class="oh"><span><b>${money(r.total)}</b></span><span class="rd">${r.cod ? 'COD ' + money(r.cod) : ''}</span></div>${ed ? `<div class="chips" onclick="event.stopPropagation()">${q.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="A.status('${o.id}','${s}');view.cq='';render()">${STBN[s]}</button>`).join('')}</div>` : ''}</div>`;
 }
 function renderCourierResults() { const e = $('#cqres'); if (e) e.innerHTML = courierMatches().map(cqCard).join('') || (view.cq ? '<p class="muted">কিছু পাওয়া যায়নি</p>' : ''); if (!view.cq) { const i = $('#cqin'); if (i) { i.value = ''; i.focus(); } } }
-const STAGE_HINT = { entry: 'কনফার্ম হওয়া অর্ডার এখানে আসে। "Steadfast বুক" চাপলে In review-তে যাবে (Pathao/হাতে পাঠালে "শিপড")।', review: 'Steadfast-এ বুক হয়েছে, তারা রিভিউ করছে।', shipped: 'কুরিয়ারের হাতে / পথে (Pathao, হাতে-শিপড, বা Steadfast রিভিউ শেষ)।', pending: 'Steadfast বলছে এখনো ডেলিভারি হয়নি, বা হোল্ড/সমস্যা — নজরে রাখুন।', delivered: 'ডেলিভারি সম্পন্ন।', rto: 'পার্সেল ফেরত আসছে — হাতে পেলে "রিটার্নড" করুন।', returned: 'ফেরত এসেছে (স্টক ফিরেছে)।' };
+const ocNow = () => view.ocall === undefined ? 'todo' : view.ocall;                  // first visit: "কল বাকি"
+const cfNow = () => view.cf === undefined ? ((cfg().couriers || []).includes('Steadfast') ? 'Steadfast' : 'all') : view.cf;   // first visit: Steadfast
+const STAGE_HINT = { entry: 'কনফার্ম হওয়া অর্ডার এখানে আসে। "Steadfast বুক" চাপলে In review-তে যাবে (Pathao/হাতে পাঠালে "শিপড")।', review: 'কুরিয়ারের হাতে / পথে — Steadfast রিভিউ, Pathao বা হাতে-শিপড সব এখানে।', pending: 'Steadfast বলছে এখনো ডেলিভারি হয়নি, বা হোল্ড/সমস্যা — নজরে রাখুন।', delivered: 'ডেলিভারি সম্পন্ন।', rto: 'পার্সেল ফেরত আসছে — হাতে পেলে "রিটার্নড" করুন।', returned: 'ফেরত এসেছে (স্টক ফিরেছে)।' };
 function courierRows() {
-  const st = view.cst || 'entry', fc = view.cf || 'all';
+  const st = view.cst || 'entry', fc = cfNow();
   const desc = st === 'all' || st === 'delivered' || st === 'returned';
   return R.onl.filter(({ o }) => { const g = cStage(o); return g && (st === 'all' || g === st) && (fc === 'all' || o.courier === fc); }).sort((a, b) => desc ? n(b.o.no) - n(a.o.no) : n(a.o.no) - n(b.o.no));
 }
 function vCourier() {
-  const s = snap(R), cs = Object.values(s.couriers), fc = view.cf || 'all', st = view.cst || 'entry';
+  const s = snap(R), cs = Object.values(s.couriers), fc = cfNow(), st = view.cst || 'entry';
   const base = R.onl.filter(({ o }) => cStage(o) && (fc === 'all' || o.courier === fc)), cnt = k => base.filter(x => k === 'all' || cStage(x.o) === k).length;
   const L = courierRows(), show = L.slice(0, view.cmax || 60), ls = +localStorage.bb_sf_last || 0, ago = ls ? Math.max(0, Math.round((Date.now() - ls) / 60000)) : -1;
   const sfNote = !can('orders_status') ? '' : API.ok() ? `<div class="muted" style="margin:6px 2px">🔄 Steadfast-এর স্ট্যাটাস নিজে নিজেই আপডেট হয় (অ্যাপ খোলা থাকলে ৫ মিনিট পরপর)${ago >= 0 ? ` · সর্বশেষ: ${ago ? ago + ' মিনিট আগে' : 'এইমাত্র'}` : ''}</div>` : `<div class="muted" style="margin:6px 2px">⚠ এই ডিভাইসে কুরিয়ার API সেট নেই — সেটিংসে Worker URL ও টোকেন দিলে Steadfast-এর স্ট্যাটাস নিজে নিজে আপডেট হবে।</div>`;
   return head('কুরিয়ার', can('orders_status') ? `${API.ok() ? `<button class="btn sm" onclick="A.sfSync()">${ico('check', 14)} Steadfast সিঙ্ক</button>` : ''}<button class="btn sm ghost" onclick="A.bulk()">${ico('list', 14)} একসাথে</button>${can('orders_edit') && can('cash_edit') ? `<button class="btn sm ghost" onclick="A.stmt()">${ico('receipt', 14)} স্টেটমেন্ট</button>` : ''}` : '') + sfNote +
     `<div class="scanrow"><input id="cqin" class="search" placeholder="কনসাইনমেন্ট নং / ফোন লিখুন বা স্ক্যান করুন" oninput="A.cq(this.value)" value="${esc(view.cq || '')}"><button class="btn" onclick="A.scan()" aria-label="স্ক্যান">${ico('scan', 20)}</button></div><div id="cqres">${courierMatches().map(cqCard).join('')}</div>` +
-    `<div class="chips sc stgrow">${[['all', 'সব'], ...CSTAGES].map(([k, l]) => `<button class="chip ${st === k ? 'on' : ''}" onclick="A.f('cst','${k}')">${k !== 'all' ? `<i class="cd" style="background:${STAGE_COLOR[k]}"></i>` : ''}${l} <small>${cnt(k)}</small></button>`).join('')}</div>` +
-    `<div class="chips sc"><span class="muted" style="align-self:center">কুরিয়ার:</span><button class="chip ${fc === 'all' ? 'on' : ''}" onclick="A.f('cf','all')">সব</button>${cfg().couriers.map(c => `<button class="chip ${fc === c ? 'on' : ''}" onclick="A.f('cf','${esc(c)}')">${esc(c)}</button>`).join('')}</div>` +
+    `<div class="chips sc stgrow">${[...CSTAGES, ['all', 'সব']].map(([k, l]) => `<button class="chip ${st === k ? 'on' : ''}" onclick="A.f('cst','${k}')">${k !== 'all' ? `<i class="cd" style="background:${STAGE_COLOR[k]}"></i>` : ''}${l} <small>${cnt(k)}</small></button>`).join('')}</div>` +
+    `<div class="chips sc"><span class="muted" style="align-self:center">কুরিয়ার:</span>${cfg().couriers.map(c => `<button class="chip ${fc === c ? 'on' : ''}" onclick="A.f('cf','${esc(c)}')">${esc(c)}</button>`).join('')}<button class="chip ${fc === 'all' ? 'on' : ''}" onclick="A.f('cf','all')">সব</button></div>` +
     `<h3>${st === 'all' ? 'সব' : stageName(st)} (${L.length})</h3>${STAGE_HINT[st] ? `<div class="muted" style="margin:-4px 2px 8px">${STAGE_HINT[st]}</div>` : ''}` + (show.map(orderCard).join('') || emptyBox('truck', 'এই ফিল্টারে কোনো অর্ডার নেই')) + (L.length > show.length ? `<button class="btn ghost" style="width:100%" onclick="view.cmax=(view.cmax||60)+60;render()">আরও দেখুন</button>` : '') +
     `<h3>কুরিয়ার সামারি</h3>${cs.map(c => `<div class="panel"><div class="oh"><b>${esc(c.name)}</b>${can('cash_view') ? `<button class="btn sm ghost" onclick="A.payHist('${esc(c.name)}')">ইতিহাস</button>` : ''}${can('cash_edit') ? `<button class="btn sm ghost" onclick="A.payCourier('${esc(c.name)}')">টাকা পেলাম</button>` : ''}</div><div class="os">পাঠানো ${c.sent} · পথে ${c.transit} · ডেলিভারড ${c.delivered} · রিটার্ন ${c.returned} (${c.sent ? Math.round(c.returned / c.sent * 100) : 0}%)</div>${can('cash_view') ? `<div class="pr"><span>প্রত্যাশিত সেটেলমেন্ট</span><b>${money(c.settle)}</b></div><div class="pr"><span>পাওনা (এখনো আসেনি)</span><b class="rd">${money(c.codDue)}</b></div>` : ''}${can('costs_view') ? `<div class="pr"><span>কুরিয়ার চার্জ (মোট)</span><b>${money(c.charge)}</b></div><div class="pr"><span>COD চার্জ</span><b>${money(c.codFee)}</b></div>${c.retRec ? `<div class="pr"><span>রিটার্নে পাওয়া চার্জ</span><b>${money(c.retRec)}</b></div>` : ''}${c.fees ? `<div class="pr"><span>আলাদা ফি</span><b>${money(c.fees)}</b></div>` : ''}` : ''}</div>`).join('') || ''}`;
 }
@@ -247,7 +255,7 @@ function vStaff() {
 }
 function vLogs() {
   if (!isOwner()) return '';
-  return head('কার্যকলাপ লগ') + `<p class="note">কে কখন কী করেছে — সর্বশেষ ১৫০টি।</p>` + (SY.logs.map(l => `<div class="li"><span><b>${esc(l.name || '')}</b><br><small>${esc(l.text || '')}</small></span><small>${new Date(l.t).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') || emptyBox('list', 'এখনো কিছু নেই (ক্লাউড সিঙ্ক চালু থাকলে এখানে আসবে)'));
+  return head('কার্যকলাপ লগ') + `<p class="note">কে কখন কী করেছে — সর্বশেষ ১৫০টি।</p>` + (SY.logs.map(l => `<div class="li"><span><b>${esc(l.name || '')}</b><br><small>${esc(l.text || '')}</small></span><small>${fmtDT(l.t)}</small></div>`).join('') || emptyBox('list', 'এখনো কিছু নেই (ক্লাউড সিঙ্ক চালু থাকলে এখানে আসবে)'));
 }
 function vLogin() {
   const c = cloudCfg() || {};
@@ -277,7 +285,7 @@ function render() {
   D = mergeState(S); R = calc(D);
   const locked = !!cloudCfg() && !profile, el = $('#main'), st = el.scrollTop;
   let v = (location.hash || '#home').slice(1).split('?')[0]; if (!VIEWS[v] || !allowed(v)) v = 'home';
-  $('#shopname').textContent = cfg().shop; $('#gearbtn').innerHTML = ico('gear', 19); $('#gearbtn').style.display = locked ? 'none' : '';
+  $('#shopname').textContent = 'BiM Manager'; $('#gearbtn').innerHTML = ico('gear', 19); $('#gearbtn').style.display = locked ? 'none' : '';
   const nav = $('#nav'), fab = $('#fab');
   if (locked) { el.innerHTML = vLogin(); nav.classList.add('hide'); fab.classList.add('hide'); chatDock(false); setSync(SY.st); return; }
   el.innerHTML = VIEWS[v]();

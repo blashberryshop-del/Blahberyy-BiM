@@ -3,9 +3,9 @@
    + item rules, customer history ("ফ্রড চেক"), Steadfast auto-sync */
 
 /* ---------- courier-page stages (derived from status + Steadfast's own status; nothing new is stored) ---------- */
-const CSTAGES = [['entry', 'Entry'], ['review', 'In review'], ['shipped', 'Shipped'], ['pending', 'Pending'], ['delivered', 'Delivered'], ['rto', 'RTO Request'], ['returned', 'Returned']];
-const STAGE_OF = { Confirmed: 'entry', Shipped: 'shipped', Delivered: 'delivered', 'Return Pending': 'rto', Returned: 'returned' };
-const STAGE_COLOR = { entry: '#d81b60', review: '#039be5', shipped: '#00897b', pending: '#7e57c2', delivered: '#2e9e50', rto: '#e53935', returned: '#78909c' };
+const CSTAGES = [['entry', 'Entry'], ['review', 'In review'], ['pending', 'Pending'], ['delivered', 'Delivered'], ['rto', 'RTO Request'], ['returned', 'Returned']];
+const STAGE_OF = { Confirmed: 'entry', Shipped: 'review', Delivered: 'delivered', 'Return Pending': 'rto', Returned: 'returned' };
+const STAGE_COLOR = { entry: '#d81b60', review: '#039be5', pending: '#7e57c2', delivered: '#2e9e50', rto: '#e53935', returned: '#78909c' };
 const stageName = k => (CSTAGES.find(x => x[0] === k) || [0, ''])[1];
 function cStage(o) {
   switch (o.status) {
@@ -14,7 +14,7 @@ function cStage(o) {
       const c = o.cstatus || '';
       if (c === 'in_review') return 'review';            // booked, Steadfast is reviewing it
       if (c === 'pending' || c === 'hold' || c === 'unknown' || c === 'exceptional' || c === 'partial_delivered' || /_approval_pending$/.test(c)) return 'pending';   // Steadfast: not delivered yet / needs a look
-      return 'shipped';                                  // with the courier (Pathao, hand-entered, or no Steadfast status yet)
+      return 'review';                                   // with the courier (Steadfast review, Pathao, hand-entered …) — there is no separate Shipped filter any more
     }
     case 'Delivered': return 'delivered';
     case 'Return Pending': return 'rto';
@@ -62,6 +62,7 @@ Object.assign(A, {
     if (!can('orders_status')) return toast('স্ট্যাটাস বদলের অনুমতি নেই');
     if (o.status !== 'Pending') return A.status(id, 'Confirmed');
     if (!itemsOk(o)) return A.needItems(o, true);
+    if (!confirm(`#${o.no} ${o.customer || ''}\nকল করে কনফার্ম পেয়েছেন? কনফার্ম করলে অর্ডার কুরিয়ার পেজে (Entry) চলে যাবে।`)) return;
     A.callSet(id, 'ok', {});
   },
   /* address → district, shown in the district box (stops following the address once someone types there) */
