@@ -130,17 +130,17 @@
         }
       });
       let delivery = REV(o.status) ? n(o.delivery) : 0;
-      if (!items.length && REV(o.status)) { rev = n(o.bill); delivery = 0; }
+      if (!items.length) { rev = 0; delivery = 0; }                     // no items chosen yet = not counted in sales / profit
       const paid = o.status === 'Delivered' ? total : n(o.advance);
       const closed = o.status === 'Cancelled' || o.status === 'Returned';
       const cod = o.pay === 'Cash on Delivery' && !closed && o.status !== 'Delivered' ? total - n(o.advance) : 0;
       const codDel = o.pay === 'Cash on Delivery' && o.status === 'Delivered' ? total - n(o.advance) : 0;
       const cc = codCfg(S, o.courier), charge = n(o.charge);
       const codBase = o.pay === 'Cash on Delivery' && o.status === 'Delivered' ? Math.max(total - n(o.advance) - (cc.base === 'net' ? charge : 0), 0) : 0;
-      const courierCharge = ['Pending', 'Confirmed', 'Cancelled'].includes(o.status) ? 0 : charge;      // courier's own delivery charge (parcel actually went out)
-      const retInc = o.status === 'Return Pending' || o.status === 'Returned' ? n(o.retCharge) : 0;       // customer paid delivery charge on return
+      const courierCharge = !items.length || ['Pending', 'Confirmed', 'Cancelled'].includes(o.status) ? 0 : charge;      // courier's own delivery charge (parcel actually went out)
+      const retInc = items.length && (o.status === 'Return Pending' || o.status === 'Returned') ? n(o.retCharge) : 0;       // customer paid delivery charge on return
       if (TRANSIT(o.status)) items.forEach(i => { const cb = combos[i.code]; if (cb) boxTr += Math.max(n(i.qty) - n(i.ret), 0) * n(cb.box); });
-      O[o.id] = { total, paid, due: closed ? 0 : total - paid, cod, codDel, rev, delivery, cost: 0, profit: 0, noItems: !items.length, codFee: codBase * cc.pct / 100, courierCharge, retInc };
+      O[o.id] = { total, paid, due: closed ? 0 : total - paid, cod, codDel, rev, delivery, cost: 0, profit: 0, noItems: !items.length, codFee: items.length ? codBase * cc.pct / 100 : 0, courierCharge, retInc };
       onl.push({ o, r: O[o.id] });
     });
     live(S, 'sales').forEach(s => {

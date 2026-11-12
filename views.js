@@ -34,13 +34,18 @@ function chartSvg(months, showProfit) {
 }
 
 /* ---------- home ---------- */
+function hsearchHtml() {
+  const q = BB.bn2en(view.hq || '').toLowerCase().replace(/^#/, '').trim(), qd = q.replace(/[^\d]/g, ''); if (!q) return '';
+  const L = R.onl.filter(({ o }) => [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note, STBN[o.status]].join(' ').toLowerCase().includes(q) || (qd.length >= 4 && String(o.phone || '').replace(/\D/g, '').includes(qd))).sort((a, b) => n(b.o.no) - n(a.o.no));
+  return `<div class="muted" style="margin:2px 2px 8px">${L.length} টা পাওয়া গেছে (সব স্ট্যাটাস)</div>` + (L.slice(0, 20).map(orderCard).join('') || emptyBox('box', 'কিছু পাওয়া যায়নি')) + (L.length > 20 ? '<div class="muted">প্রথম ২০টা দেখানো হলো — আরও নির্দিষ্ট করে লিখুন</div>' : '');
+}
 function vHome() {
   const r = view.range || 'month', a = agg(R, inR(r)), at = agg(R, inR('today')), s = snap(R), P = Object.values(R.prod);
   const ov = can('orders_view'), sv = can('sales_view'), cc = canCost(), cp = canProfit();
   const low = P.filter(x => x.status !== 'OK').sort((x, y) => x.stock - y.stock).slice(0, 8), top = [...P].sort((x, y) => y.sold - x.sold).filter(x => x.sold > 0).slice(0, 5);
   const y = today().slice(0, 4), months = (ov || sv) ? [...Array(12)].map((_, i) => agg(R, d => (d || '').startsWith(y + '-' + String(i + 1).padStart(2, '0')))) : null;
   const hero = `<div class="hero"><small>${greet()} · ${fmtD(today())}</small><h1>${esc(cfg().shop)}</h1><div class="hst">${ov ? `<div><span>আজকের অর্ডার</span><b>${at.orders}</b></div>` : ''}${ov || sv ? `<div><span>আজকের বিক্রি</span><b>${money(at.sales)}</b></div>` : ''}${ov ? `<div><span>কুরিয়ারে</span><b>${a.withCourier}</b></div>` : ''}</div></div>`;
-  let h = hero + `<div class="chips sc" style="margin-top:14px">${RANGES.map(([k, l]) => `<button class="chip ${r === k ? 'on' : ''}" onclick="A.range('${k}')">${l}</button>`).join('')}</div>`;
+  let h = (ov ? `<input class="search" id="hq" style="margin-bottom:10px" placeholder="🔎 যেকোনো অর্ডার খুঁজুন — নাম / ফোন / নং / কনসাইনমেন্ট (সব স্ট্যাটাস)" value="${esc(view.hq || '')}" oninput="view.hq=this.value;A.hsearch()"><div id="hres">${hsearchHtml()}</div>` : '') + hero + `<div class="chips sc" style="margin-top:14px">${RANGES.map(([k, l]) => `<button class="chip ${r === k ? 'on' : ''}" onclick="A.range('${k}')">${l}</button>`).join('')}</div>`;
   if (ov) {
     const okP = P.filter(x => x.status === 'OK').length, lowP = P.filter(x => x.status === 'Low Stock').length, outP = P.length - okP - lowP;
     const recent = [...R.onl].sort((x, y) => n(y.o.no) - n(x.o.no)).slice(0, 5);
@@ -82,13 +87,13 @@ function orderRows() {
   const q = (view.oq || '').toLowerCase().trim(), f = view.of || 'all', inr = inR(view.orange || 'all'), drill = !!(view.osrc || view.odist || view.oloc);
   const every = !!q || drill;     // a search or a report drill-down looks at every order; otherwise this page only holds orders not yet sent to the Courier page
   return R.onl.filter(({ o }) => (every || !cStage(o)) && (!drill || f === 'all' || o.status === f) && callMatch(o, ocNow()) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
-    (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => (ocNow() === 'sched' || ocNow() === 'later') ? String(a.o.callDate || '').localeCompare(String(b.o.callDate || '')) || n(a.o.no) - n(b.o.no) : n(b.o.no) - n(a.o.no));
+    (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => (b.o.urgent ? 1 : 0) - (a.o.urgent ? 1 : 0) || ((ocNow() === 'sched' || ocNow() === 'later') ? String(a.o.callDate || '').localeCompare(String(b.o.callDate || '')) || n(a.o.no) - n(b.o.no) : n(b.o.no) - n(a.o.no)));
 }
 const fdBtn = o => o.phone ? `<button class="qb fd fd-${fraudLevel(o)}" aria-label="ফ্রড চেক" title="ফ্রড চেক" onclick="event.stopPropagation();A.fraud('${o.id}')">${ico('shield', 14)}</button>` : '';
 const OPEN = (() => { try { return new Set(JSON.parse(localStorage.bb_exp || '[]')); } catch (e) { return new Set(); } })();
 const saveExp = () => { try { localStorage.bb_exp = JSON.stringify([...OPEN].slice(-200)); } catch (e) { } };
 function orderCard({ o, r }) {
-  const sm = !!view.sel, on = sm && view.sel[o.id], dist = dKey(o), src = normSource(o.source), stg = cStage(o), stt = can('orders_status'), acts = [], open = !sm && OPEN.has(o.id);
+  const sm = !!view.sel, on = sm && view.sel[o.id], urg = !!o.urgent && !['Delivered', 'Cancelled', 'Returned'].includes(o.status), dist = dKey(o), src = normSource(o.source), stg = cStage(o), stt = can('orders_status'), acts = [], open = !sm && OPEN.has(o.id);
   const btn = (cls, js, ic, txt) => `<button class="btn sm ${cls}" onclick="event.stopPropagation();${js}">${ico(ic, 14)} ${txt}</button>`;
   let lbl = '';
   if (!sm && can('orders_view')) {
@@ -100,14 +105,16 @@ function orderCard({ o, r }) {
         if (stt) acts.push(btn(canBook(o) ? 'ghost' : '', `A.status('${o.id}','Shipped')`, 'truck', canBook(o) ? 'শিপড (হাতে)' : 'শিপড'));
       }
     } else if (o.status === 'Shipped' && stt) acts.push(btn('', `A.status('${o.id}','Delivered')`, 'check', 'ডেলিভারড'));
+    if (can('orders_edit') && !['Delivered', 'Cancelled', 'Returned'].includes(o.status)) acts.push(btn(o.urgent ? 'warnb' : 'ghost', `A.urgent('${o.id}')`, 'alert', o.urgent ? 'জরুরি ✓' : 'জরুরি'));
     lbl = btn('ghost', `A.labelSheet(['${o.id}'])`, 'printer', 'লেবেল');       // label button on the RIGHT, so the frequent buttons on the left are not hit by mistake
   }
   const more = (acts.length || lbl ? `<div class="oact">${acts.join('')}<span class="oact-r">${lbl}</span></div>` : '') +
     (!sm && o.status === 'Pending' && stt ? `<div class="ccall">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" title="${CALLS[k][1]}" onclick="event.stopPropagation();A.call('${o.id}','${k}')">${CALLS[k][0]}${o.call === k ? '' : ' <small>' + CALLS[k][1] + '</small>'}</button>`).join('')}</div>` : '') +
     (o.by ? `<div class="os by">👤 যোগ করেছেন: <b>${esc(o.by)}</b>${o.byAt ? ' · ' + fmtDT(o.byAt) : ''}</div>` : '');
   const tg = !sm && more ? `<button class="oc-tg${open ? ' open' : ''}" aria-label="বিস্তারিত" onclick="event.stopPropagation();A.tgl('${o.id}')">▾</button>` : '';
-  return `<div class="oc ${stg ? 'oc-cur st-' + stg : 'oc-ord'} ${on ? 'selc' : ''}" id="oc_${o.id}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b><span class="ohr">${badge(o.status)}${tg}</span></div>` +
-    `<div class="os">${esc(o.phone || '')}${qbs(o.phone)}${fdBtn(o)} · ${fmtD(o.date)}</div><div class="os">${stg ? `<span class="stg stg-${stg}">${stageName(stg)}</span>` : ''}${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` +
+  const noteTxt = o.note && !(src && normSource(o.note) === src) ? String(o.note) : '', ths = (o.items || []).filter(i => imgOf(i.code)).slice(0, 5).map(i => `<span class="thw"><img class="ith" src="${imgOf(i.code)}" alt="" onclick="event.stopPropagation();A.zoom('${esc(i.code)}')">${n(i.qty) > 1 ? `<b>×${i.qty}</b>` : ''}</span>`).join('');
+  return `<div class="oc ${stg ? 'oc-cur st-' + stg : 'oc-ord'} ${on ? 'selc' : ''} ${urg ? 'urg' : ''}" id="oc_${o.id}" onclick="${sm ? `A.sel('${o.id}')` : `A.order('${o.id}')`}"><div class="oh"><b>${sm ? `<input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="accent-color:var(--b);width:18px;height:18px;vertical-align:-3px;margin-right:6px">` : ''}#${o.no} ${esc(o.customer || '')}</b><span class="ohr">${urg ? '<span class="urgtag">🔥 জরুরি</span>' : ''}${badge(o.status)}${tg}</span></div>` +
+    `<div class="os">${esc(o.phone || '')}${qbs(o.phone)}${fdBtn(o)} · ${fmtD(o.date)}</div><div class="os">${stg ? `<span class="stg stg-${stg}">${stageName(stg)}</span>` : ''}${src ? `<span class="tag">${esc(src)}</span>` : ''}${dist !== 'অজানা' ? `<span class="tag">${esc(dist)}</span>` : ''}${o.printed ? '<span class="tag">লেবেল ✓</span>' : ''}${o.courier ? `<span class="tag">${esc(o.courier)}${o.tracking ? ' · ' + esc(o.tracking) : ''}</span>` : ''}${o.tracking ? qbs('', o.tracking) : ''}${o.cstatus ? `<span class="tag">${esc(CST[o.cstatus] || o.cstatus)}</span>` : ''}${callTag(o)}</div>` + (noteTxt ? `<div class="onote">📝 ${esc(noteTxt)}</div>` : '') + (ths ? `<div class="thr">${ths}</div>` : '') +
     `<div class="oh"><span><b>${money(r.total)}</b>${r.noItems ? ' <small class="warn">⚠ আইটেম নেই</small>' : ''}</span><span class="${r.cod || r.due > 0 ? 'rd' : 'gr'}">${r.cod ? 'COD ' + money(r.cod) : r.due > 0 ? 'বাকি ' + money(r.due) : r.paid >= r.total && r.total ? '✓ পেইড' : ''}</span></div>` +
     (open ? `<div class="omore">${more}</div>` : '') + `</div>`;
 }
@@ -122,7 +129,7 @@ function vOrders() {
   const f = view.of || 'all', drill = !!(view.osrc || view.odist || view.oloc), base = R.onl.filter(x => !cStage(x.o));
   const fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'এলাকা: ' + view.oloc], drill && f !== 'all' && ['of', 'স্ট্যাটাস: ' + (STBN[f] || f)], view.orange && view.orange !== 'all' && ['orange', RANGES.find(x => x[0] === view.orange)[1]]].filter(Boolean);
   const sm = !!view.sel, cnt = sm ? Object.keys(view.sel).length : 0;
-  const callChips = [['todo', '📞 কল বাকি'], ...Object.keys(CALLS).filter(k => k !== 'ok').map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল'], ['', 'সব']];
+  const callChips = [['todo', '📞 কল বাকি'], ...Object.keys(CALLS).filter(k => k !== 'ok').map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল'], ['urgent', '🔥 জরুরি'], ['', 'সব']];
   return (sm ? `<div class="selbar"><b>${cnt} টা সিলেক্ট</b><button class="btn sm" onclick="A.selLabel()">${ico('printer', 14)} লেবেল</button>${can('orders_status') ? '<button class="btn sm ghost" onclick="A.selStatus()">স্ট্যাটাস</button>' : ''}<button class="btn sm ghost" onclick="A.selAll()">সব</button><button class="btn sm ghost" onclick="A.selMode()">বাতিল</button></div>` : '') +
     head('অনলাইন অর্ডার', `${can('orders_view') ? `<button class="btn sm ghost" onclick="A.selMode()">${ico('check', 14)} সিলেক্ট</button>` : ''}${can('orders_edit') ? `<button class="btn sm" onclick="A.quick()">${ico('bolt', 14)} কুইক</button>` : ''}`) +
     `<input class="search" placeholder="নাম / ফোন / অর্ডার নং / কনসাইনমেন্ট / সোর্স" value="${esc(view.oq || '')}" oninput="view.oq=this.value;A.olist()">` +
@@ -138,22 +145,24 @@ function cqCard({ o, r }) {
 }
 function renderCourierResults() { const e = $('#cqres'); if (e) e.innerHTML = courierMatches().map(cqCard).join('') || (view.cq ? '<p class="muted">কিছু পাওয়া যায়নি</p>' : ''); if (!view.cq) { const i = $('#cqin'); if (i) { i.value = ''; i.focus(); } } }
 const ocNow = () => view.ocall === undefined ? 'todo' : view.ocall;                  // first visit: "কল বাকি"
-const cfNow = () => view.cf === undefined ? ((cfg().couriers || []).includes('Steadfast') ? 'Steadfast' : 'all') : view.cf;   // first visit: Steadfast
+const cfNow = () => view.cf === undefined ? 'all' : view.cf;                   // first visit: every courier ("সব")
+const cfApply = (st, o, fc) => st === 'entry' || fc === 'all' || o.courier === fc;   // the courier row never touches the Entry stage
 const STAGE_HINT = { entry: 'কনফার্ম হওয়া অর্ডার এখানে আসে। "Steadfast বুক" চাপলে In review-তে যাবে (Pathao/হাতে পাঠালে "শিপড")।', review: 'কুরিয়ারের হাতে / পথে — Steadfast রিভিউ, Pathao বা হাতে-শিপড সব এখানে।', pending: 'Steadfast বলছে এখনো ডেলিভারি হয়নি, বা হোল্ড/সমস্যা — নজরে রাখুন।', delivered: 'ডেলিভারি সম্পন্ন।', rto: 'পার্সেল ফেরত আসছে — হাতে পেলে "রিটার্নড" করুন।', returned: 'ফেরত এসেছে (স্টক ফিরেছে)।' };
 function courierRows() {
   const st = view.cst || 'entry', fc = cfNow();
   const desc = st === 'all' || st === 'delivered' || st === 'returned';
-  return R.onl.filter(({ o }) => { const g = cStage(o); return g && (st === 'all' || g === st) && (fc === 'all' || o.courier === fc); }).sort((a, b) => desc ? n(b.o.no) - n(a.o.no) : n(a.o.no) - n(b.o.no));
+  return R.onl.filter(({ o }) => { const g = cStage(o); return g && (st === 'all' || g === st) && cfApply(st === 'all' ? g : st, o, fc); }).sort((a, b) => desc ? n(b.o.no) - n(a.o.no) : n(a.o.no) - n(b.o.no));
 }
 function vCourier() {
   const s = snap(R), cs = Object.values(s.couriers), fc = cfNow(), st = view.cst || 'entry';
-  const base = R.onl.filter(({ o }) => cStage(o) && (fc === 'all' || o.courier === fc)), cnt = k => base.filter(x => k === 'all' || cStage(x.o) === k).length;
-  const L = courierRows(), show = L.slice(0, view.cmax || 60), ls = +localStorage.bb_sf_last || 0, ago = ls ? Math.max(0, Math.round((Date.now() - ls) / 60000)) : -1;
+  const base = R.onl.filter(({ o }) => cStage(o)), cnt = k => base.filter(x => (k === 'all' || cStage(x.o) === k) && cfApply(k === 'all' ? cStage(x.o) : k, x.o, fc)).length;
+  const L = courierRows(), show = L.slice(0, view.cmax || 60), sm = !!view.sel, scnt = sm ? Object.keys(view.sel).length : 0, sbar = sm ? `<div class="selbar"><b>${scnt} টা সিলেক্ট</b><button class="btn sm" onclick="A.selLabel()">${ico('printer', 14)} লেবেল</button>${can('orders_status') ? '<button class="btn sm ghost" onclick="A.selStatus()">স্ট্যাটাস</button>' : ''}<button class="btn sm ghost" onclick="A.selAll()">সব (${L.length})</button><button class="btn sm ghost" onclick="A.selMode()">বাতিল</button></div>` : ''; view.visible = L.map(x => x.o.id);
+  const ls = +localStorage.bb_sf_last || 0, ago = ls ? Math.max(0, Math.round((Date.now() - ls) / 60000)) : -1;
   const sfNote = !can('orders_status') ? '' : API.ok() ? `<div class="muted" style="margin:6px 2px">🔄 Steadfast-এর স্ট্যাটাস নিজে নিজেই আপডেট হয় (অ্যাপ খোলা থাকলে ৫ মিনিট পরপর)${ago >= 0 ? ` · সর্বশেষ: ${ago ? ago + ' মিনিট আগে' : 'এইমাত্র'}` : ''}</div>` : `<div class="muted" style="margin:6px 2px">⚠ এই ডিভাইসে কুরিয়ার API সেট নেই — সেটিংসে Worker URL ও টোকেন দিলে Steadfast-এর স্ট্যাটাস নিজে নিজে আপডেট হবে।</div>`;
-  return head('কুরিয়ার', can('orders_status') ? `${API.ok() ? `<button class="btn sm" onclick="A.sfSync()">${ico('check', 14)} Steadfast সিঙ্ক</button>` : ''}<button class="btn sm ghost" onclick="A.bulk()">${ico('list', 14)} একসাথে</button>${can('orders_edit') && can('cash_edit') ? `<button class="btn sm ghost" onclick="A.stmt()">${ico('receipt', 14)} স্টেটমেন্ট</button>` : ''}` : '') + sfNote +
+  return sbar + head('কুরিয়ার', `<button class="btn sm ghost" onclick="A.selMode()">${ico('check', 14)} সিলেক্ট</button>` + (can('orders_status') ? `${API.ok() ? `<button class="btn sm" onclick="A.sfSync()">${ico('check', 14)} Steadfast সিঙ্ক</button>` : ''}<button class="btn sm ghost" onclick="A.bulk()">${ico('list', 14)} একসাথে</button>${can('orders_edit') && can('cash_edit') ? `<button class="btn sm ghost" onclick="A.stmt()">${ico('receipt', 14)} স্টেটমেন্ট</button>` : ''}` : ''))+ sfNote +
     `<div class="scanrow"><input id="cqin" class="search" placeholder="কনসাইনমেন্ট নং / ফোন লিখুন বা স্ক্যান করুন" oninput="A.cq(this.value)" value="${esc(view.cq || '')}"><button class="btn" onclick="A.scan()" aria-label="স্ক্যান">${ico('scan', 20)}</button></div><div id="cqres">${courierMatches().map(cqCard).join('')}</div>` +
     `<div class="chips sc stgrow">${[...CSTAGES, ['all', 'সব']].map(([k, l]) => `<button class="chip ${st === k ? 'on' : ''}" onclick="A.f('cst','${k}')">${k !== 'all' ? `<i class="cd" style="background:${STAGE_COLOR[k]}"></i>` : ''}${l} <small>${cnt(k)}</small></button>`).join('')}</div>` +
-    `<div class="chips sc"><span class="muted" style="align-self:center">কুরিয়ার:</span>${cfg().couriers.map(c => `<button class="chip ${fc === c ? 'on' : ''}" onclick="A.f('cf','${esc(c)}')">${esc(c)}</button>`).join('')}<button class="chip ${fc === 'all' ? 'on' : ''}" onclick="A.f('cf','all')">সব</button></div>` +
+    `<div class="chips sc ${st === 'entry' ? 'dim' : ''}"><span class="muted" style="align-self:center">কুরিয়ার:</span>${cfg().couriers.map(c => `<button class="chip ${fc === c ? 'on' : ''}" onclick="A.f('cf','${esc(c)}')">${esc(c)}</button>`).join('')}<button class="chip ${fc === 'all' ? 'on' : ''}" onclick="A.f('cf','all')">সব</button></div>${st === 'entry' ? '<div class="muted" style="margin:-2px 2px 4px;font-size:12.5px">Entry-তে কুরিয়ার ফিল্টার কাজ করে না — অন্য ফিল্টার (In review, Pending…) বা "সব" বাছলে কাজ করবে।</div>' : ''}` +
     `<h3>${st === 'all' ? 'সব' : stageName(st)} (${L.length})</h3>${STAGE_HINT[st] ? `<div class="muted" style="margin:-4px 2px 8px">${STAGE_HINT[st]}</div>` : ''}` + (show.map(orderCard).join('') || emptyBox('truck', 'এই ফিল্টারে কোনো অর্ডার নেই')) + (L.length > show.length ? `<button class="btn ghost" style="width:100%" onclick="view.cmax=(view.cmax||60)+60;render()">আরও দেখুন</button>` : '') +
     `<h3>কুরিয়ার সামারি</h3>${cs.map(c => `<div class="panel"><div class="oh"><b>${esc(c.name)}</b>${can('cash_view') ? `<button class="btn sm ghost" onclick="A.payHist('${esc(c.name)}')">ইতিহাস</button>` : ''}${can('cash_edit') ? `<button class="btn sm ghost" onclick="A.payCourier('${esc(c.name)}')">টাকা পেলাম</button>` : ''}</div><div class="os">পাঠানো ${c.sent} · পথে ${c.transit} · ডেলিভারড ${c.delivered} · রিটার্ন ${c.returned} (${c.sent ? Math.round(c.returned / c.sent * 100) : 0}%)</div>${can('cash_view') ? `<div class="pr"><span>প্রত্যাশিত সেটেলমেন্ট</span><b>${money(c.settle)}</b></div><div class="pr"><span>পাওনা (এখনো আসেনি)</span><b class="rd">${money(c.codDue)}</b></div>` : ''}${can('costs_view') ? `<div class="pr"><span>কুরিয়ার চার্জ (মোট)</span><b>${money(c.charge)}</b></div><div class="pr"><span>COD চার্জ</span><b>${money(c.codFee)}</b></div>${c.retRec ? `<div class="pr"><span>রিটার্নে পাওয়া চার্জ</span><b>${money(c.retRec)}</b></div>` : ''}${c.fees ? `<div class="pr"><span>আলাদা ফি</span><b>${money(c.fees)}</b></div>` : ''}` : ''}</div>`).join('') || ''}`;
 }
@@ -167,7 +176,7 @@ function vSales() {
 function productListHtml() {
   const q = (view.pq || '').toLowerCase(), f = view.pf || 'all', cc = canCost();
   const L = Object.values(R.prod).filter(x => (f === 'all' || (f === 'low' && x.status === 'Low Stock') || (f === 'out' && x.status === 'Out of Stock')) && (!q || (x.p.name + x.p.code + (x.p.brand || '')).toLowerCase().includes(q)));
-  return L.map(x => `<div class="oc" onclick="A.product('${x.p.id}')"><div class="oh"><b>${esc(x.p.name)} <small class="muted">${esc(x.p.code)}</small></b><span class="bd ${x.status === 'OK' ? 'b-green' : x.status === 'Low Stock' ? 'b-amber' : 'b-red'}">${x.stock}</span></div><div class="os">${cc ? 'কস্ট ' + money(x.avg) + ' · ' : ''}সেল ${money(x.p.sell)}${cc ? ' · ভ্যালু ' + money(x.value) : ''}${x.tr ? ' · কুরিয়ারে ' + x.tr : ''}</div></div>`).join('') || emptyBox('tag', 'প্রোডাক্ট নেই');
+  return L.map(x => `<div class="oc" onclick="A.product('${x.p.id}')"><div class="oh"><b>${x.p.img ? `<img class="ith" src="${x.p.img}" onclick="event.stopPropagation();A.zoom('${esc(x.p.code)}')" alt=""> ` : ''}${esc(x.p.name)} <small class="muted">${esc(x.p.code)}</small></b><span class="bd ${x.status === 'OK' ? 'b-green' : x.status === 'Low Stock' ? 'b-amber' : 'b-red'}">${x.stock}</span></div><div class="os">${cc ? 'কস্ট ' + money(x.avg) + ' · ' : ''}সেল ${money(x.p.sell)}${cc ? ' · ভ্যালু ' + money(x.value) : ''}${x.tr ? ' · কুরিয়ারে ' + x.tr : ''}</div></div>`).join('') || emptyBox('tag', 'প্রোডাক্ট নেই');
 }
 function vProducts() {
   const f = view.pf || 'all';
@@ -176,9 +185,9 @@ function vProducts() {
 }
 function vCombos() {
   const cc = canCost();
-  return head('কম্বো', can('products_edit') ? `<button class="btn sm" onclick="A.combo()">${ico('plus', 14)} নতুন</button>` : '') + (Object.values(R.combos).map(c => {
+  return head('কম্বো', `<button class="btn sm ghost" onclick="A.comboPlan()">🧮 প্ল্যানার</button>` + (can('products_edit') ? `<button class="btn sm" onclick="A.combo()">${ico('plus', 14)} নতুন</button>` : '')) + (Object.values(R.combos).map(c => {
     const cost = R.unitCost(c.code), can2 = Math.min(...(c.items || []).map(i => R.prod[i.code] ? Math.floor(R.prod[i.code].stock / n(i.qty)) : 0), 9999);
-    return `<div class="oc" onclick="A.combo('${c.id}')"><div class="oh"><b>${esc(c.name)} <small class="muted">${esc(c.code)}</small></b><b>${money(c.sell)}</b></div><div class="os">${cc ? 'কস্ট ' + money(cost) + ' · প্রফিট ' + money(n(c.sell) - cost) + ' · ' : ''}এখন বানানো যাবে ${can2} টা · ${(c.items || []).length} আইটেম</div></div>`;
+    return `<div class="oc" onclick="A.combo('${c.id}')"><div class="oh"><b>${esc(c.name)} <small class="muted">${esc(c.code)}</small></b><b>${money(c.sell)}</b></div><div class="os">${cc ? 'কস্ট ' + money(cost) + ' · প্রফিট ' + money(n(c.sell) - cost) + ' · ' : ''}এখন বানানো যাবে ${can2} টা · ${(c.items || []).length} আইটেম</div><div class="btnrow" style="margin-top:6px"><button class="btn sm ghost" onclick="event.stopPropagation();A.comboPlan('${esc(c.code)}')">🧮 কতটা বানাবেন? কী কিনতে হবে</button></div></div>`;
   }).join('') || emptyBox('layers', 'কম্বো নেই'));
 }
 
@@ -240,7 +249,7 @@ function vReports() {
 
 /* ---------- more menu, staff, logs, login ---------- */
 function vMore() {
-  const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_view'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
+  const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_view'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['team', 'chart', 'টার্গেট ও স্যালারি', 'orders_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
   const who = profile ? `${esc(profile.name || '')} · ${profile.local ? 'লোকাল মোড' : profile.role === 'owner' ? 'Owner' : 'স্টাফ'}` : '';
   return head('আরও', '') + `<div class="grid">${items.map(([k, i, l]) => `<button class="gi" onclick="A.nav('${k}')"><span>${ico(i, 24)}</span>${l}</button>`).join('')}</div>` +
     (isOwner() ? `<button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="A.labelSheet([],1)">${ico('printer', 18)} লেবেল ডিজাইন</button>` : '') + `<button class="btn ghost" style="width:100%" onclick="A.settings()">${ico('gear', 18)} সেটিংস, থিম ও ব্যাকআপ</button><p class="note" style="text-align:center">${who}</p><p class="note" style="text-align:center">Copyright © MD NURNABI</p>`;
@@ -277,8 +286,8 @@ Object.assign(A, {
 });
 
 /* ---------- router ---------- */
-const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, chat: vChat };
-const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_view', staff: '#owner', logs: '#owner' };
+const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, chat: vChat, team: vTeam };
+const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_view', staff: '#owner', logs: '#owner', team: 'orders_view' };
 const allowed = v => !NEED[v] || (NEED[v] === '#owner' ? isOwner() : can(NEED[v]));
 let lastView = '';
 function render() {

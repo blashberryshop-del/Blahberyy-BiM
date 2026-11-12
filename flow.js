@@ -55,13 +55,12 @@ function fraudLevel(o) {
 
 Object.assign(A, {
   itemsOk,
-  needItems(o, open) { toast(`⚠ #${o.no} — আগে আইটেম ও পরিমাণ দিন, তারপর কনফার্ম হবে`); if (open) A.order(o.id); return false; },
+  needItems(o, open) { toast(`⚠ #${o.no} — আগে আইটেম ও পরিমাণ দিন, তারপর কুরিয়ারে (শিপড/বুক) যাবে`); if (open) A.order(o.id); return false; },
   /* the "কনফার্ম" button: customer confirmed on the call → order moves to the Courier page (Entry) */
   confirm(id) {
     const o = S.orders[id]; if (!o) return;
     if (!can('orders_status')) return toast('স্ট্যাটাস বদলের অনুমতি নেই');
     if (o.status !== 'Pending') return A.status(id, 'Confirmed');
-    if (!itemsOk(o)) return A.needItems(o, true);
     if (!confirm(`#${o.no} ${o.customer || ''}\nকল করে কনফার্ম পেয়েছেন? কনফার্ম করলে অর্ডার কুরিয়ার পেজে (Entry) চলে যাবে।`)) return;
     A.callSet(id, 'ok', {});
   },

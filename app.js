@@ -143,7 +143,7 @@ function subscribeAll() {
     if (JSON.stringify(np) !== JSON.stringify(profile)) { const before = profile; setProfile(np); if (before && before.role !== 'owner') { subscribeAll(); } render(); }
   }));
   if (isOwner()) {
-    SY.unsub.push(db.collection(`${base}/staff`).onSnapshot(s => { SY.staff = {}; s.forEach(d => SY.staff[d.id] = Object.assign({ id: d.id }, d.data())); if (/^#(staff)/.test(location.hash)) render(); }));
+    SY.unsub.push(db.collection(`${base}/staff`).onSnapshot(s => { SY.staff = {}; s.forEach(d => SY.staff[d.id] = Object.assign({ id: d.id }, d.data())); if (/^#(staff|team)/.test(location.hash)) render(); }));
     SY.unsub.push(db.collection(`${base}/logs`).orderBy('t', 'desc').limit(150).onSnapshot(s => { SY.logs = []; s.forEach(d => SY.logs.push(d.data())); if (/^#(logs)/.test(location.hash)) render(); }, () => { }));
   }
 }
@@ -187,7 +187,7 @@ async function createStaff(v) {
   const c = cloudCfg(); if (!SY.db) throw new Error('আগে ক্লাউড সিঙ্ক চালু করুন (অনলাইনে)');
   let app; try { app = firebase.app('sec'); } catch (e) { app = firebase.initializeApp(c.config, 'sec'); }
   const cred = await app.auth().createUserWithEmailAndPassword(v.email, v.password); const id = cred.user.uid; await app.auth().signOut();
-  await SY.db.doc(`shops/${SY.shop}/staff/${id}`).set({ role: 'staff', name: v.name, email: v.email, perms: PM.fix(v.perms), active: true, t: Date.now() });
+  await SY.db.doc(`shops/${SY.shop}/staff/${id}`).set({ role: 'staff', name: v.name, email: v.email, perms: PM.fix(v.perms), active: true, t: Date.now(), join: v.join || '', salary: +v.salary || 0, payDay: +v.payDay || 0 });
   logAct('স্টাফ যোগ: ' + v.name); return id;
 }
 
@@ -215,16 +215,18 @@ function fld(k, label, type = 'text', val = '', opts, attrs = '') {
   return `<label class="f"><span>${label}</span>${inp}</label>`;
 }
 function vals(el) { const o = {}; el.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? (i.value === '' ? '' : parseFloat(i.value)) : i.value.trim()); return o; }
-function codeList(onlyProd) {
-  const l = Object.values(R.prod).map(x => `<option value="${esc(x.p.code)}">${esc(x.p.name)}</option>`);
-  if (!onlyProd) Object.values(R.combos).forEach(c => l.push(`<option value="${esc(c.code)}">📦 ${esc(c.name)}</option>`));
+function codeList(onlyProd, sellMode) {
+  const keep = new Set(view.keep || []);                                // codes already inside this order stay selectable
+  const l = Object.values(R.prod).filter(x => !sellMode || x.stock > 0 || keep.has(x.p.code)).map(x => `<option value="${esc(x.p.code)}">${esc(x.p.name)}${sellMode ? ' · স্টক ' + x.stock : ''}</option>`);
+  if (!onlyProd) Object.values(R.combos).filter(c => !sellMode || comboMake(c) > 0 || keep.has(c.code)).forEach(c => l.push(`<option value="${esc(c.code)}">📦 ${esc(c.name)}${sellMode ? ' · বানানো যাবে ' + comboMake(c) : ''}</option>`));
   return `<datalist id="codes">${l.join('')}</datalist>`;
 }
 function lineRow(it = {}, mode = 'sell', showRet) {
-  return `<div class="ln"><input class="c" list="codes" placeholder="কোড" value="${esc(it.code || '')}" oninput="A.pick(this,'${mode}')"><input class="q" type="number" inputmode="decimal" placeholder="পরিমাণ" value="${it.qty ?? ''}">${mode === 'none' ? '' : `<input class="p" type="number" inputmode="decimal" placeholder="${mode === 'cost' ? 'কেনা দাম' : 'দাম'}" value="${it.price ?? ''}">`}${showRet ? `<input class="r" type="number" inputmode="decimal" placeholder="ফেরত" value="${it.ret || ''}">` : ''}<button class="x" onclick="this.parentNode.remove()">${ico('x', 16)}</button></div>`;
+  return `<div class="ln"><input class="c" list="codes" placeholder="কোড" value="${esc(it.code || '')}" oninput="A.pick(this,'${mode}')" onchange="A.stockChk(this,'${mode}')"><input class="q" type="number" inputmode="decimal" placeholder="পরিমাণ" value="${it.qty ?? ''}">${mode === 'none' ? '' : `<input class="p" type="number" inputmode="decimal" placeholder="${mode === 'cost' ? 'কেনা দাম' : 'দাম'}" value="${it.price ?? ''}">`}${showRet ? `<input class="r" type="number" inputmode="decimal" placeholder="ফেরত" value="${it.ret || ''}">` : ''}<button class="x" onclick="this.parentNode.remove()">${ico('x', 16)}</button></div>`;
 }
 function linesEditor(items, mode = 'sell', showRet = true) {
-  return codeList(mode === 'cost') + `<div class="lbl">আইটেম <small>(কোড · পরিমাণ${mode === 'none' ? '' : ' · দাম'}${showRet ? ' · ফেরত' : ''})</small></div><div id="lines">${(items && items.length ? items : [{}]).map(i => lineRow(i, mode, showRet)).join('')}</div><button class="btn ghost sm" onclick="A.addLine('${mode}',${showRet})">+ আইটেম</button>`;
+  view.keep = (items || []).map(i => i.code);
+  return codeList(mode === 'cost', mode === 'sell') + `<div class="lbl">আইটেম <small>(কোড · পরিমাণ${mode === 'none' ? '' : ' · দাম'}${showRet ? ' · ফেরত' : ''})</small></div><div id="lines">${(items && items.length ? items : [{}]).map(i => lineRow(i, mode, showRet)).join('')}</div><button class="btn ghost sm" onclick="A.addLine('${mode}',${showRet})">+ আইটেম</button>`;
 }
 function readLines(el) {
   return [...el.querySelectorAll('.ln')].map(r => ({ code: r.querySelector('.c').value.trim(), qty: n(r.querySelector('.q').value), price: r.querySelector('.p') ? n(r.querySelector('.p').value) : 0, ret: r.querySelector('.r') ? n(r.querySelector('.r').value) : 0 })).filter(i => i.code && i.qty);
@@ -241,7 +243,9 @@ function callTag(o) {
   if (o.cancelType && CANCEL_ST.includes(o.status)) h += `<span class="tag">${CANCELT[o.cancelType] || ''}</span>`;
   return h;
 }
-const callMatch = (o, f) => !f || (f === 'todo' ? o.status === 'Pending' && !o.call : f === 'ct_call' || f === 'ct_courier' ? o.cancelType === f.slice(3) && CANCEL_ST.includes(o.status) : o.call === f && (f === 'ok' || o.status === 'Pending'));
+const imgOf = code => (R.prod[code] && R.prod[code].p.img) || (R.combos[code] && R.combos[code].img) || '';
+const comboMake = c => Math.min(...(c.items || []).map(i => R.prod[i.code] ? Math.floor(R.prod[i.code].stock / (n(i.qty) || 1)) : 0), 9999);
+const callMatch = (o, f) => !f || (f === 'urgent' ? !!o.urgent && !['Delivered', 'Cancelled', 'Returned'].includes(o.status) : f === 'todo' ? o.status === 'Pending' && !o.call : f === 'ct_call' || f === 'ct_courier' ? o.cancelType === f.slice(3) && CANCEL_ST.includes(o.status) : o.call === f && (f === 'ok' || o.status === 'Pending'));
 function callLine(o) {
   if (!o.call || !CALLS[o.call]) return '';
   const ago = o.callAt ? fmtDT(o.callAt) : '';
