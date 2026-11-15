@@ -26,6 +26,15 @@ const itemsOk = o => (o.items || []).some(i => i.code && n(i.qty) > 0);
 
 /* ---------- customer history by phone ("ফ্রড চেক") ---------- */
 const ph10 = p => BB.bn2en(p || '').replace(/\D/g, '').slice(-10);
+/* duplicate guard: other live orders with the same phone number (cached per calculation, so cards stay fast) */
+let _dupR = null, _dupM = {};
+const dupOrders = o => {
+  const p = ph10(o && o.phone); if (p.length < 10) return [];
+  if (_dupR !== R) { _dupR = R; _dupM = {}; live(S, 'orders').forEach(x => { if (['Cancelled', 'Returned'].includes(x.status)) return; const k = ph10(x.phone); if (k.length === 10) (_dupM[k] = _dupM[k] || []).push(x); }); }
+  return (_dupM[p] || []).filter(x => x.id !== o.id);
+};
+const isSent = x => !!(x.cid || x.tracking) || ['Shipped', 'Delivered', 'Return Pending'].includes(x.status);
+const dupTxt = L => L.slice(0, 4).map(x => `#${x.no} (${STBN[x.status] || x.status}${isSent(x) ? ', কুরিয়ারে দেওয়া' : ''}, ${fmtD(x.date)})`).join('\n');
 const cBucket = o => /steadfast/i.test(o.courier || '') ? 'Steadfast' : /pathao/i.test(o.courier || '') ? 'Pathao' : (o.courier || 'অন্যান্য');
 const isRet = o => o.status === 'Returned' || o.status === 'Return Pending' || (o.status === 'Cancelled' && o.cancelType === 'courier');
 const riskLevel = t => (t.ret >= 2 || (t.ret >= 1 && t.ret > t.del)) ? 'bad' : (t.ret >= 1 || t.can >= 2) ? 'warn' : t.del >= 1 ? 'good' : 'new';

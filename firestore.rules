@@ -77,7 +77,7 @@ service cloud.firestore {
         allow create: if (can(shop, 'orders_edit')) && delOk(shop);
         // 'status only' staff may change just these fields on an existing order
         allow update: if ((can(shop, 'orders_edit')) && delOk(shop))
-          || ((can(shop, 'orders_status')) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', '_u']));
+          || ((can(shop, 'orders_status')) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', 'flags', '_u']));
       }
 
       match /sales/{id} {
@@ -161,6 +161,12 @@ service cloud.firestore {
                   && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])));
         // auto-clean: the owner any time, anyone who can see orders only once an item is older than 3 days
         allow delete: if isOwner(shop) || ((can(shop, 'orders_view')) && request.time.toMillis() - resource.data.t > 259200000);
+      }
+
+      match /chatSeen/{id} {
+        allow read: if can(shop, 'orders_view');
+        // a person records only their own read-position (doc id = their uid)
+        allow create, update: if (can(shop, 'orders_view')) && id == request.auth.uid && request.resource.data.uid == request.auth.uid;
       }
 
       match /chatImages/{id} {

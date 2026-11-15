@@ -14,7 +14,7 @@ function tgCfg(ym) {                                                   // target
   return { basis: (m && m.basis) || TG_DEF.basis, levels, set: !!m };
 }
 const modList = () => isOwner() ? Object.values(SY.staff || {}).filter(s => s.role !== 'owner' && s.active !== false).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-  : (profile && profile.uid ? [{ id: profile.uid, name: profile.name }] : []);
+  : (() => { const m = {}; ((cfg() && cfg().roster) || []).forEach(r => { if (r && r.u && r.n && !r.o) m[r.u] = { id: r.u, name: r.n }; }); if (profile && profile.uid && profile.role !== 'owner') m[profile.uid] = { id: profile.uid, name: profile.name }; return Object.values(m).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))); })();
 const orderBy = (o, s) => o.byUid ? o.byUid === s.id : String(o.by || '').trim().toLowerCase() === String(s.name || '').trim().toLowerCase() && !!s.name;
 
 function modStats(s, ym) {
@@ -48,6 +48,8 @@ function vTeam() {
   if (own) rows.sort((a, b) => (a.paid ? 1 : 0) - (b.paid ? 1 : 0) || String(a.due || '9').localeCompare(String(b.due || '9')));
   const tot = own ? rows.reduce((a, r) => { if (r.notYet) return a; const pay = +r.s.salary || 0; return { all: a.all + pay + r.lv.bonus, paid: a.paid + (r.paid ? (+r.paid.salary || 0) + (+r.paid.bonus || 0) : 0), unpaid: a.unpaid + (r.paid ? 0 : 1) }; }, { all: 0, paid: 0, unpaid: 0 }) : null;
   const lvl = T.levels.map((l, i) => `<div class="pr"><span>🏅 লেভেল ${i + 1} — ${l.n} টা ${T.basis === 'all' ? 'অর্ডার' : 'ডেলিভারড'}</span><b class="gr">+${money(l.b)}</b></div>`).join('') || '<div class="os">টার্গেট এখনো সেট করা হয়নি</div>';
+  const rk = rows.filter(r => !r.notYet).slice().sort((a, b) => b.lv.cnt - a.lv.cnt || b.st.added - a.st.added), medal = ['🥇', '🥈', '🥉'], meId = SY.uid;
+  const board = rk.length > 1 ? `<div class="panel"><b class="ph">🏆 টার্গেট প্রতিযোগিতা — ${ymName(ym)}</b>` + rk.map((r, i) => { const nx = r.lv.next ? Math.min(100, Math.round(r.lv.cnt / r.lv.next.n * 100)) : 100; return `<div class="pr" style="${r.s.id === meId ? 'font-weight:700' : ''}"><span>${medal[i] || (i + 1) + '.'} ${esc(r.s.name || '')}${r.s.id === meId ? ' (আপনি)' : ''}${r.lv.lv ? ` · 🏅${r.lv.lv}` : ''}</span><b>${r.lv.cnt} ${T.basis === 'all' ? 'অর্ডার' : 'ডেলিভারড'}</b></div><div class="tbar"><i style="width:${nx}%"></i></div>`; }).join('') + '</div>' : '';
   const card = r => {
     const { s, st, lv } = r, pct = lv.next ? Math.min(100, Math.round(lv.cnt / lv.next.n * 100)) : 100, open = !!(view.tdet || {})[s.id];
     const days = Object.keys(st.days).sort().reverse().map(d => { const x = st.days[d]; return `<div class="tdl"><span>${fmtD(d)}</span><span>${x.added}</span><span class="gr">${x.delivered}</span><span class="rd">${x.cancelled}</span><span class="am">${x.returned}</span></div>`; }).join('');
@@ -70,7 +72,7 @@ function vTeam() {
     `<div class="chips" style="align-items:center"><button class="chip" onclick="view.tm='${ymShift(ym, -1)}';render()">◀</button><b style="padding:0 6px">${ymName(ym)}</b><button class="chip" onclick="view.tm='${ymShift(ym, 1)}';render()">▶</button>${ym !== ymNow() ? `<button class="chip" onclick="view.tm=null;render()">এই মাস</button>` : ''}</div>` +
     `<div class="panel"><b class="ph">এই মাসের টার্গেট${T.set ? '' : ' (নমুনা — নিজের মতো সেট করুন)'}</b>${lvl}<p class="note" style="margin:6px 0 0">${T.basis === 'all' ? 'মোট যোগ করা অর্ডার গুনে' : 'সফলভাবে ডেলিভারড অর্ডার গুনে'} লেভেল ধরা হয়। যে লেভেলে পৌঁছাবে, সেই বোনাস বেতনের সাথে পাবে।</p></div>` +
     (own ? `<div class="panel"><div class="pr"><span>এই মাসে মোট দিতে হবে (বেতন + বোনাস)</span><b>${money(tot.all)}</b></div><div class="pr"><span>দেওয়া হয়েছে</span><b class="gr">${money(tot.paid)}</b></div><div class="pr"><span>এখনো বাকি</span><b class="rd">${tot.unpaid} জন</b></div></div>` : '') +
-    (rows.map(card).join('') || emptyBox('users', own ? 'কোনো মডারেটর নেই — স্টাফ ও রোল থেকে যোগ করুন' : 'তথ্য নেই'));
+    board + (rows.map(card).join('') || emptyBox('users', own ? 'কোনো মডারেটর নেই — স্টাফ ও রোল থেকে যোগ করুন' : 'তথ্য নেই'));
 }
 
 Object.assign(A, {

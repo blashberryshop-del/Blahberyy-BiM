@@ -125,7 +125,7 @@ function mergeRemote(coll, snapx) {
   const emptyCache = snapx.metadata && snapx.metadata.fromCache && snapx.size === 0;   // an empty cache-only snapshot must never make us 'restore' every local record
   if (!emptyCache) Object.values(S[coll]).forEach(l => { if (seen[l.id] == null || seen[l.id] < l._u) push(coll, l); });
   if (mig) { const t = Date.now() - 5000; ['products', 'combos', 'purchases', 'settings', 'productCosts', 'comboCosts', 'purchaseFin', 'finSettings'].forEach(c => { if (c !== coll) Object.values(S[c]).forEach(r => { if (r._u > t) push(c, r); }); }); }
-  if (ch) { persist(); if (coll === 'chat') chatRefresh(); else render(); }
+  if (ch) { persist(); if (coll === 'chat' || coll === 'chatSeen') chatRefresh(); else render(); }
 }
 let FSP = false;   // offline cache (IndexedDB) so a normal launch only reads what changed; multi-tab keeps two open tabs in sync
 function fsDb() {
@@ -217,8 +217,8 @@ function fld(k, label, type = 'text', val = '', opts, attrs = '') {
 function vals(el) { const o = {}; el.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? (i.value === '' ? '' : parseFloat(i.value)) : i.value.trim()); return o; }
 function codeList(onlyProd, sellMode) {
   const keep = new Set(view.keep || []);                                // codes already inside this order stay selectable
-  const l = Object.values(R.prod).filter(x => !sellMode || x.stock > 0 || keep.has(x.p.code)).map(x => `<option value="${esc(x.p.code)}">${esc(x.p.name)}${sellMode ? ' · স্টক ' + x.stock : ''}</option>`);
-  if (!onlyProd) Object.values(R.combos).filter(c => !sellMode || comboMake(c) > 0 || keep.has(c.code)).forEach(c => l.push(`<option value="${esc(c.code)}">📦 ${esc(c.name)}${sellMode ? ' · বানানো যাবে ' + comboMake(c) : ''}</option>`));
+  const l = Object.values(R.prod).map(x => `<option value="${esc(x.p.code)}">${esc(x.p.name)}${sellMode ? ' · স্টক ' + x.stock : ''}</option>`);
+  if (!onlyProd) Object.values(R.combos).forEach(c => l.push(`<option value="${esc(c.code)}">📦 ${esc(c.name)}${sellMode ? ' · বানানো যাবে ' + comboMake(c) : ''}</option>`));
   return `<datalist id="codes">${l.join('')}</datalist>`;
 }
 function lineRow(it = {}, mode = 'sell', showRet) {
@@ -245,6 +245,13 @@ function callTag(o) {
 }
 const imgOf = code => (R.prod[code] && R.prod[code].p.img) || (R.combos[code] && R.combos[code].img) || '';
 const comboMake = c => Math.min(...(c.items || []).map(i => R.prod[i.code] ? Math.floor(R.prod[i.code].stock / (n(i.qty) || 1)) : 0), 9999);
+const stockShort = o => {                                              // items whose quantity is more than the shelf has (only meaningful until the order leaves for the courier)
+  if (['Shipped', 'Delivered', 'Return Pending', 'Returned', 'Cancelled'].includes(o.status)) return [];
+  const need = {}; (o.items || []).forEach(i => R.expand(i.code, n(i.qty)).forEach(([c, q]) => { need[c] = (need[c] || 0) + q; }));
+  return Object.keys(need).filter(c => R.prod[c] && need[c] > R.prod[c].stock).map(c => ({ code: c, name: R.prod[c].p.name, need: need[c], have: Math.max(R.prod[c].stock, 0) }));
+};
+const stockMsg = o => stockShort(o).map(x => `${x.name} (লাগবে ${x.need}, আছে ${x.have})`).join(', ');
+const stockBlock = o => { const m = stockMsg(o); if (m) { toast(`⛔ #${o.no} স্টক আউট — ${m}। স্টক যোগ হলে কুরিয়ারে দিন`); return true; } return false; };
 const callMatch = (o, f) => !f || (f === 'urgent' ? !!o.urgent && !['Delivered', 'Cancelled', 'Returned'].includes(o.status) : f === 'todo' ? o.status === 'Pending' && !o.call : f === 'ct_call' || f === 'ct_courier' ? o.cancelType === f.slice(3) && CANCEL_ST.includes(o.status) : o.call === f && (f === 'ok' || o.status === 'Pending'));
 function callLine(o) {
   if (!o.call || !CALLS[o.call]) return '';

@@ -1,7 +1,7 @@
 /* BlashBerry core logic (no DOM) — pure functions, tested in node */
 (function (g) {
   const ST = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled', 'Return Pending', 'Returned'];
-  const OUT = s => s !== 'Cancelled' && s !== 'Returned';                    // stock leaves the shelf
+  const OUT = s => s === 'Shipped' || s === 'Delivered' || s === 'Return Pending';   // stock leaves the shelf only once the order moves Entry → In review (or later)
   const REV = s => s !== 'Cancelled' && s !== 'Returned' && s !== 'Return Pending'; // counts as sale
   const TRANSIT = s => s === 'Shipped' || s === 'Return Pending';            // with courier
   const n = v => +v || 0;

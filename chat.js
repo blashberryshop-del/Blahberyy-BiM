@@ -20,7 +20,27 @@ const seenMap = () => { try { return JSON.parse(localStorage.bb_chat_seen2 || '{
 let SEENIDS = null;
 const seenIds = () => { if (!SEENIDS) { try { const a = JSON.parse(localStorage.bb_chat_ids || 'null'); if (a) SEENIDS = new Set(a); } catch (e) { } } return SEENIDS; };
 const markAll = () => { try { const cur = chatAll().map(m => m.id); if (!cur.length) return; const s = seenIds() || new Set(); cur.forEach(i => s.add(i)); SEENIDS = s; localStorage.bb_chat_ids = JSON.stringify([...s].slice(-800)); } catch (e) { } };
-const markSeen = key => { try { const s = seenMap(); s[key] = Math.max(Date.now(), chatAll().reduce((a, m) => Math.max(a, m.t || 0), 0)); localStorage.bb_chat_seen2 = JSON.stringify(s); } catch (e) { } if (!document.hidden) markAll(); };
+/* seen receipts: each person's device writes ONE tiny doc (chatSeen/<uid>) = the newest message time they have opened per room / order thread. Message times are compared with message times, so wrong phone clocks cannot fake it */
+const SEENP = {}; let SEENT = 0;
+function seenPub(key) {
+  try {
+    if (!SY.uid || !S.chatSeen) return; const k = key === 't' ? view.thread : key; if (!k) return;
+    const ts = (key === 't' ? chatThread(k) : chatGroup(k)).reduce((a, m) => Math.max(a, m.t || 0), 0); if (!ts) return;
+    const cur = S.chatSeen[SY.uid]; if (((cur && cur.k) || {})[k] >= ts || SEENP[k] >= ts) return; SEENP[k] = ts;
+    clearTimeout(SEENT); SEENT = setTimeout(() => {
+      const c = S.chatSeen[SY.uid] || {}, kk = Object.assign({}, c.k, SEENP), ks = Object.keys(kk).sort((a, b) => kk[b] - kk[a]).slice(0, 60), k2 = {}; ks.forEach(x => { k2[x] = kk[x]; });
+      put('chatSeen', { id: SY.uid, uid: SY.uid, name: (profile && profile.name) || '', k: k2 });
+    }, 1500);
+  } catch (e) { }
+}
+function seenLine(m) {
+  try {
+    if (m.uid !== SY.uid || m._d) return ''; const key = isThreadMsg(m) ? m.orderId : msgRoom(m);
+    const who = Object.values(S.chatSeen || {}).filter(x => x && x.uid && x.uid !== SY.uid && ((x.k || {})[key] || 0) >= (m.t || 0)).map(x => x.name || 'স্টাফ'); if (!who.length) return '';
+    const all = chatRoster().filter(r => r.u !== SY.uid).length; return `<div class="seen">👁 ${who.length >= all && all > 1 ? 'সবাই দেখেছে' : esc(who.join(', '))}</div>`;
+  } catch (e) { return ''; }
+}
+const markSeen = key => { try { const s = seenMap(); s[key] = Math.max(Date.now(), chatAll().reduce((a, m) => Math.max(a, m.t || 0), 0)); localStorage.bb_chat_seen2 = JSON.stringify(s); } catch (e) { } if (!document.hidden) { markAll(); seenPub(key); } };
 const unreadIn = (key, f) => { const t = seenMap()[key] || 0; return chatAll().filter(m => f(m) && (m.t || 0) > t && m.uid !== SY.uid).length; };
 const roomUnread = room => unreadIn(room, m => !isThreadMsg(m) && msgRoom(m) === room);
 const chatUnread = () => {
@@ -42,7 +62,7 @@ const chatRoster = () => {
 function rosterSync() {                                          // owner keeps the team list in the synced settings, so every staff phone can tag everyone
   try {
     if (!isOwner() || !SY.staff || !Object.keys(SY.staff).length || !D) return;
-    const list = chatRoster().map(r => ({ u: r.u, n: r.n })); if (JSON.stringify(list) === JSON.stringify((D.settings.main || {}).roster || [])) return;
+    const list = chatRoster().map(r => { const x = { u: r.u, n: r.n }; if ((SY.staff[r.u] || {}).role === 'owner' || r.u === SY.uid) x.o = 1; return x; }); if (JSON.stringify(list) === JSON.stringify((D.settings.main || {}).roster || [])) return;
     save('settings', Object.assign({ id: 'main' }, D.settings.main, { roster: list }), true);
   } catch (e) { }
 }
@@ -91,7 +111,7 @@ function chatBubble(m) {
   }
   const mm = m.mentions || [], tagged = !mine && mm.includes(SY.uid); let ct = esc(m.text || '');
   if (mm.length) { const ro = chatRoster(); mm.forEach(u => { const r = ro.find(x => x.u === u); if (r) ct = ct.split(esc('@' + r.n)).join(`<span class="mn${u === SY.uid ? ' you' : ''}">${esc('@' + r.n)}</span>`); }); }
-  return `<div class="cm ${mine ? 'me' : ''}" id="m_${m.id}"><div class="cb${tagged ? ' tg' : ''}" onclick="A.msgMenu('${m.id}')">${tagged ? '<div class="tgl">🔔 আপনাকে ট্যাগ করা হয়েছে</div>' : ''}<div class="cn">${mine ? 'আমি' : esc(m.name || 'স্টাফ')} · ${hhmm(m.t)}</div>${body}${m.text ? `<div class="ct">${ct}</div>` : ''}${reactHtml(m)}</div></div>`;
+  return `<div class="cm ${mine ? 'me' : ''}" id="m_${m.id}"><div class="cb${tagged ? ' tg' : ''}" onclick="A.msgMenu('${m.id}')">${tagged ? '<div class="tgl">🔔 আপনাকে ট্যাগ করা হয়েছে</div>' : ''}<div class="cn">${mine ? 'আমি' : esc(m.name || 'স্টাফ')} · ${hhmm(m.t)}</div>${body}${m.text ? `<div class="ct">${ct}</div>` : ''}${reactHtml(m)}${seenLine(m)}</div></div>`;
 }
 const replyBar = key => view[key] ? `<div class="rbar"><span>↩ <b>${esc(view[key].name || '')}</b> ${esc(view[key].text || '')}</span><button class="x" onclick="view.${key}=null;chatRefresh()">✕</button></div>` : '';
 const chatListHtml = () => { const L = chatGroup(curRoom()).slice(-150); return L.length ? L.map(chatBubble).join('') : '<p class="muted" style="text-align:center;margin:40px 0">এই গ্রুপে এখনো কোনো মেসেজ নেই। প্রথম মেসেজ পাঠান।</p>'; };

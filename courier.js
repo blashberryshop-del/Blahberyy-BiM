@@ -21,7 +21,7 @@ const API = {
 };
 const isSF = o => /steadfast/i.test(o.courier || '');
 const sfRef = o => o.cid ? { k: 'cid', v: String(o.cid) } : /^\d+$/.test(String(o.tracking || '').trim()) ? { k: 'cid', v: String(o.tracking).trim() } : /^[A-Za-z0-9_-]{4,40}$/.test(String(o.tracking || '').trim()) ? { k: 'code', v: String(o.tracking).trim() } : null;
-const canBook = o => API.ok() && can('orders_edit') && !o.cid && o.status === 'Confirmed' && itemsOk(o);   // only orders in the courier page's Entry stage
+const canBook = o => API.ok() && can('orders_edit') && !o.cid && o.status === 'Confirmed' && itemsOk(o) && !stockShort(o).length;   // only orders in the courier page's Entry stage
 
 Object.assign(A, {
   /* ----- settings helpers ----- */
@@ -51,10 +51,12 @@ Object.assign(A, {
     if (o.cid) return toast('এই অর্ডার আগেই বুক করা আছে (CID ' + o.cid + ')');
     if (o.status !== 'Confirmed') return toast('আগে অর্ডারটা কনফার্ম করুন — কনফার্ম হলে কুরিয়ার পেজের Entry-তে আসবে, তখন বুক হবে');
     if (!itemsOk(o)) return toast('আইটেম ও পরিমাণ দিন, তারপর বুক করুন');
+    if (stockBlock(o)) return;
     const r = R.O[id] || { total: 0 }, phone = String(o.phone || '').replace(/\D/g, '').replace(/^88(?=01)/, ''), addr = String(o.address || '').trim();
     const cod = o.pay === 'Cash on Delivery' ? Math.max(Math.round(r.total - n(o.advance)), 0) : 0;
     const bad = !o.customer ? 'কাস্টমারের নাম নেই' : !/^01[3-9]\d{8}$/.test(phone) ? 'ফোন নম্বর ঠিক নেই (১১ ডিজিট)' : addr.length < 5 ? 'ঠিকানা নেই' : !r.total ? 'বিলের পরিমাণ ০ — আইটেম বা বিল দিন' : '';
     if (bad) return toast('বুক করা যাচ্ছে না: ' + bad);
+    const dp = dupOrders(o).filter(isSent); if (dp.length && !confirm(`⚠ ডুপ্লিকেট সতর্কতা!\n\nএই নম্বর (${phone}) দিয়ে আগেই পার্সেল দেওয়া হয়েছে:\n${dupTxt(dp)}\n\nতবুও #${o.no} আবার বুক করবেন?`)) return;
     if (!confirm(`Steadfast-এ বুক করবেন?\n\n#${o.no} ${o.customer}\n${phone}\n${addr}\nCOD: ৳${cod.toLocaleString('en-IN')}\n\n⚠ এটা আসল পার্সেল তৈরি করবে। এখান থেকে বাতিল করা যায় না (Steadfast প্যানেল থেকে করতে হবে)।`)) return;
     A._busy = A._busy || {}; if (A._busy[id]) return; A._busy[id] = 1; toast('বুক হচ্ছে…');
     try {

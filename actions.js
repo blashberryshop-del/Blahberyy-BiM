@@ -1,4 +1,5 @@
 /* BlashBerry — actions, forms and sheets */
+const picsFld = (o, dis) => { const p = o.pics || []; return `<div class="lbl">📎 অতিরিক্ত ছবি <small>(সর্বোচ্চ ২টা — কাস্টমারের স্ক্রিনশট/রেফারেন্স)</small></div><div class="btnrow">` + [0, 1].map(i => `<span style="display:inline-flex;align-items:center;gap:4px"><img id="opimg${i}" class="ith lg" ${p[i] ? `src="${p[i]}"` : 'style="display:none"'} alt="" ${dis ? '' : `onclick="A.opick(${i})"`}>${dis ? '' : `<button type="button" class="btn ghost sm" onclick="A.opick(${i})">📎 ${i + 1}</button><button type="button" class="btn ghost sm" onclick="A.opclear(${i})">✕</button>`}<input type="hidden" data-k="pic${i}" value="${p[i] || ''}"></span>`).join('') + '</div>'; };
 const imgFld = (p, dis) => `<div class="lbl">ছবি <small>(অর্ডার কার্ডে ছোট করে দেখাবে, ট্যাপ করলে বড়)</small></div><div class="btnrow"><img id="pimg" class="ith lg" ${p.img ? `src="${p.img}"` : 'style="display:none"'} alt="">${dis ? '' : '<button type="button" class="btn ghost sm" onclick="A.prodImg()">📷 ছবি বাছুন</button><button type="button" class="btn ghost sm" onclick="A.prodImgClear()">✕ সরান</button>'}</div><input type="hidden" data-k="img" value="${p.img || ''}">`;
 const A = {
   cp(t, what) { t = String(t || '').trim(); if (!t) return toast('কপি করার মতো কিছু নেই'); const done = () => toast('✓ ' + (what ? what + ' ' : '') + 'কপি হয়েছে: ' + t), fb = () => { const e = document.createElement('textarea'); e.value = t; e.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(e); e.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (x) { } e.remove(); ok ? done() : prompt('কপি করুন:', t); }; (navigator.clipboard ? navigator.clipboard.writeText(t).then(done, fb) : fb()); },
@@ -13,12 +14,9 @@ const A = {
     const c = inp.value.trim(); const price = mode === 'cost' ? (R.prod[c] ? R.prod[c].avg : '') : R.sellPrice(c);
     if (price) p.value = Math.round(price);
   },
-  stockChk(inp, mode) {
-    const row = inp.parentNode, q = row.querySelector('.q');
-    if (mode === 'sell') {                                     // a product with no stock cannot be added to an order
-      const c0 = inp.value.trim(), pr = R.prod[c0], cb = R.combos[c0], keep = (view.keep || []).includes(c0);
-      if (!keep && ((pr && pr.stock <= 0) || (cb && comboMake(cb) <= 0))) { toast('❌ ' + (pr ? pr.p.name : cb.name) + ' — স্টক নেই, অর্ডারে দেওয়া যাবে না'); inp.value = ''; if (q) q.value = ''; const pp = row.querySelector('.p'); if (pp) pp.value = ''; return; }
-    }
+  stockChk(inp, mode) {                                  // order / sale items must be products (or combos) that exist on the "প্রোডাক্ট ও স্টক" page
+    if (mode !== 'sell') return; const c0 = inp.value.trim(); if (!c0) return;
+    if (!R.prod[c0] && !R.combos[c0]) { const row = inp.parentNode, q = row.querySelector('.q'), pp = row.querySelector('.p'); toast('❌ "' + c0 + '" প্রোডাক্ট পেজে নেই — তালিকা থেকে বাছুন (নতুন প্রোডাক্ট আগে প্রোডাক্ট পেজে যোগ করুন)'); inp.value = ''; if (q) q.value = ''; if (pp) pp.value = ''; }
   },
   addLine(mode, ret) { $('#lines').insertAdjacentHTML('beforeend', lineRow({}, mode, ret)); },
   tgl(id) {                                            // open/close the extra buttons of ONE card, in place (no re-render, scroll stays); remembered until you close it
@@ -40,7 +38,8 @@ const A = {
   /* ---------- orders ---------- */
   status(id, st, quiet) {
     const o = S.orders[id]; if (!o || o.status === st) return; if (!can('orders_status')) return toast('স্ট্যাটাস বদলের অনুমতি নেই');
-    if (st === 'Shipped' && !itemsOk(o)) return A.needItems(o);   // confirming without items is fine (it waits in Entry); sending to the courier needs items
+    if (st === 'Shipped' && !itemsOk(o)) return A.needItems(o);
+    if (st === 'Shipped' && stockBlock(o)) return;   // confirming without items is fine (it waits in Entry); sending to the courier needs items
     const prev = o.status, prevCT = o.cancelType; o.status = st;
     if (st === 'Cancelled' && !o.cancelType) o.cancelType = (o.tracking || o.cid) ? 'courier' : 'call';   // cancelled after it went to the courier vs at the confirmation call
     save('orders', o, quiet, `অর্ডার #${o.no} → ${st}`);
@@ -81,6 +80,7 @@ const A = {
       (id ? `<div class="btnrow" style="margin:4px 0 8px"><button class="btn ghost sm" onclick="A.forward('${id}')">${ico('up', 14)} টিম গ্রুপে পাঠান</button><button class="btn ghost sm" onclick="A.thread('${id}')">💬 এই অর্ডার নিয়ে আলোচনা${typeof chatCount === 'function' && chatCount(id) ? ' (' + chatCount(id) + ')' : ''}</button></div>` : '') +
       fld('date', 'তারিখ', 'date', o.date, 0, dis) + fld('customer', 'কাস্টমার', 'text', o.customer, 0, dis) + fld('phone', 'ফোন', 'tel', o.phone, 0, dis) + `<div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn sm" onclick="A.dialIn('phone')">${ico('phone', 14)} কল করুন</button><button type="button" class="btn ghost sm" onclick="A.cpIn('phone','নম্বর')">${ico('copy', 14)} নম্বর কপি</button>${id ? `<button type="button" class="btn ghost sm" onclick="A.fraud('${id}')">${ico('shield', 14)} ফ্রড চেক</button>` : ''}</div>` + fld('address', 'ঠিকানা', 'textarea', o.address, 0, `${dis} oninput="A.autoArea()"`) +
       `<div class="row2">${fld('source', 'সোর্স', 'select', normSource(o.source), srcOpts(o.source), dis)}${fld('area', 'জেলা (ঠিকানা থেকে অটো বসে)', 'text', o.area || areaOf(o.address).district, 0, `${dis} data-man="${o.area && o.area !== areaOf(o.address).district ? 1 : 0}" oninput="this.dataset.man=1"`)}</div>` +
+      picsFld(o, dis) +
       `<div class="row2">${fld('note', 'নোট', 'text', o.note, 0, dis)}${fld('urgent', 'গুরুত্ব', 'select', o.urgent ? '1' : '', [['', 'সাধারণ'], ['1', '🔥 জরুরি']], dis)}</div>` + (ed ? linesEditor(o.items, 'sell', true) : `<div class="lbl">আইটেম</div><div class="os">${(o.items || []).map(i => esc(i.code) + '×' + i.qty).join(', ') || '—'}</div>`) +
       `<div class="row2">${fld('delivery', 'ডেলিভারি চার্জ', 'number', o.delivery, 0, dis)}${fld('discount', 'ডিসকাউন্ট', 'number', o.discount, 0, dis)}</div>` +
       fld('bill', 'বিল (আইটেম না দিলে এই টাকাই ধরা হবে)', 'number', o.bill, 0, dis) +
@@ -94,11 +94,12 @@ const A = {
     const dlg = sheet(id ? `অর্ডার #${o.no}` : 'নতুন অর্ডার', body, ed ? d => {
       const v = vals(d); if (!v.customer && !v.phone) { toast('নাম বা ফোন দিন'); return false; }
       const its = readLines(d);
-      const bad = its.filter(i => { const kp = (o.items || []).some(x => x.code === i.code), pr = R.prod[i.code], cb = R.combos[i.code]; return !kp && ((pr && pr.stock <= 0) || (cb && comboMake(cb) <= 0)); });
-      if (bad.length) { toast('❌ স্টক নেই — অর্ডারে দেওয়া যাবে না: ' + bad.map(i => i.code).join(', ')); return false; }
+      const bad = its.filter(i => i.code && !R.prod[i.code] && !R.combos[i.code]);
+      if (bad.length) { toast('❌ প্রোডাক্ট পেজে নেই: ' + bad.map(i => i.code).join(', ')); return false; }
+      if (v.status === 'Shipped' && v.status !== o.status) { const tmp = Object.assign({}, o, { items: its, status: o.status }); if (stockBlock(tmp)) return false; }
       if (v.status === 'Shipped' && v.status !== o.status && !its.length) { toast('⚠ আইটেম ও পরিমাণ না দিলে কুরিয়ারে/শিপড করা যাবে না'); return false; }
-      if (!id && v.phone && live(S, 'orders').some(x => x.phone === v.phone && x.date === v.date && x.status !== 'Cancelled') && !confirm(`এই নম্বরে (${v.phone}) একই তারিখে আগেই অর্ডার আছে।\nতবুও সেভ করবেন?`)) return false;
-      v.urgent = v.urgent === '1' ? 1 : 0; v.source = normSource(v.source); if (v.status === 'Cancelled' && !v.cancelType && !o.cancelType) v.cancelType = (v.tracking || o.tracking) ? 'courier' : 'call'; Object.assign(o, v, { items: its, no: o.no || nextNo() }); if (!o.by) { o.by = (profile && profile.name) || ''; o.byUid = (profile && profile.uid) || ''; o.byAt = Date.now(); } save('orders', o);
+      if (!id && v.phone) { const dp = dupOrders({ phone: v.phone }); if (dp.length && !confirm(`⚠ এই নম্বরে (${v.phone}) আগেই অর্ডার আছে:\n${dupTxt(dp)}\n\nতবুও নতুন অর্ডার সেভ করবেন?`)) return false; }
+      o.pics = [v.pic0, v.pic1].filter(Boolean); delete v.pic0; delete v.pic1; v.urgent = v.urgent === '1' ? 1 : 0; v.source = normSource(v.source); if (v.status === 'Cancelled' && !v.cancelType && !o.cancelType) v.cancelType = (v.tracking || o.tracking) ? 'courier' : 'call'; Object.assign(o, v, { items: its, no: o.no || nextNo() }); if (!o.by) { o.by = (profile && profile.name) || ''; o.byUid = (profile && profile.uid) || ''; o.byAt = Date.now(); } save('orders', o);
     } : null);
     if (can('costs_view')) { dlg.addEventListener('input', () => A.codRow(dlg)); dlg.addEventListener('change', () => A.codRow(dlg)); A.codRow(dlg); }
   },
@@ -127,6 +128,7 @@ const A = {
       `<div class="panel" style="margin-top:10px">${buy.length ? `<div class="pr"><span>কিনতে হবে</span><b class="rd">${buy.length} রকম · মোট ${tot} পিস</b></div>${cv ? `<div class="pr"><span>আনুমানিক খরচ (গড় কস্ট ধরে)</span><b>${money(tc)}</b></div>` : ''}` : '<div class="pr"><span>স্টক যথেষ্ট</span><b class="gr">✓ কিছু কিনতে হবে না</b></div>'}</div>` +
       (buy.length ? `<button class="btn ghost sm" style="margin-top:8px" onclick="A.cp(${JSON.stringify(buy.map(x => x.name + ' (' + x.c + '): ' + x.sh + ' পিস').join('\n')).replace(/"/g, '&quot;')},'কেনার তালিকা')">📋 কেনার তালিকা কপি</button>` : '');
   },
+  flag(id, k) { const o = S.orders[id]; if (!o) return; if (!can('orders_status')) return toast('অনুমতি নেই'); o.flags = Object.assign({}, o.flags || {}); if (o.flags[k]) delete o.flags[k]; else o.flags[k] = 1; save('orders', o, true, `অর্ডার #${o.no} মার্ক: ${k}`); toast(o.flags[k] ? (k === 'wrong' ? '📵 ভুল নম্বর মার্ক হলো' : '⚠ ঝুঁকিপূর্ণ কাস্টমার মার্ক হলো') : 'মার্ক সরানো হলো'); render(); },
   urgent(id) { const o = S.orders[id]; if (!o) return; o.urgent = o.urgent ? 0 : 1; save('orders', o); },
   hsearch() { const e = $('#hres'); if (e) e.innerHTML = hsearchHtml(); },
   zoom(code) {
@@ -138,6 +140,13 @@ const A = {
     i.onchange = async () => { const f = i.files && i.files[0]; i.remove(); if (!f) return; try { const u = await shrink(f, 320, 0.72, 22000), h = document.querySelector('#sheet [data-k=img]'), im = $('#pimg'); if (h) h.value = u; if (im) { im.src = u; im.style.display = ''; } } catch (e) { toast('ছবি নেওয়া যায়নি'); } };
     i.click();
   },
+  opick(i) {
+    let f0 = $('#opfile'); if (f0) f0.remove(); f0 = document.createElement('input'); f0.id = 'opfile'; f0.type = 'file'; f0.accept = 'image/*'; f0.style.display = 'none'; document.body.appendChild(f0);
+    f0.onchange = async () => { const f = f0.files && f0.files[0]; f0.remove(); if (!f) return; try { const u = await shrink(f, 420, 0.72, 30000), h = document.querySelector('#sheet [data-k=pic' + i + ']'), im = $('#opimg' + i); if (h) h.value = u; if (im) { im.src = u; im.style.display = ''; } } catch (e) { toast('ছবি নেওয়া যায়নি'); } };
+    f0.click();
+  },
+  opclear(i) { const h = document.querySelector('#sheet [data-k=pic' + i + ']'), im = $('#opimg' + i); if (h) h.value = ''; if (im) { im.removeAttribute('src'); im.style.display = 'none'; } },
+  zoomU(id, i) { const o = S.orders[id], src = o && o.pics && o.pics[i]; if (!src) return; $('#zoom') && $('#zoom').remove(); const d = document.createElement('div'); d.id = 'zoom'; d.onclick = () => d.remove(); d.innerHTML = `<img src="${src}" alt=""><div class="zc">অর্ডার #${esc(o.no)} · সংযুক্ত ছবি</div>`; document.body.appendChild(d); },
   prodImgClear() { const h = document.querySelector('#sheet [data-k=img]'), im = $('#pimg'); if (h) h.value = ''; if (im) { im.removeAttribute('src'); im.style.display = 'none'; } },
   quick(text) {
     const body = `<button class="btn ghost sm" onclick="A.clip()">${ico('list', 16)} ক্লিপবোর্ড থেকে নিন</button>${fld('t', 'কাস্টমারের মেসেজ paste করুন', 'textarea', text || '')}<div id="qprev"></div>`;
@@ -163,7 +172,7 @@ const A = {
     const ids = Object.keys(view.sel || {}); if (!ids.length) return toast('অর্ডার সিলেক্ট করুন'); if (!can('orders_status')) return toast('অনুমতি নেই');
     sheet(`${ids.length} টা অর্ডারের স্ট্যাটাস`, `<div class="chips">${ST.map(s => `<button class="chip" onclick="A.selStatusDo('${s}')">${STBN[s]}</button>`).join('')}</div>`);
   },
-  selStatusDo(st) { let skip = 0; Object.keys(view.sel || {}).forEach(id => { const o = S.orders[id]; if (o && o.status !== st && st === 'Shipped' && !itemsOk(o)) { skip++; return; } if (o && o.status !== st) { o.status = st; save('orders', o, true, `অর্ডার #${o.no} → ${st}`); } }); toast(`✓ ${Object.keys(view.sel).length - skip} টা → ${STBN[st]}${skip ? ` · ${skip} টায় আইটেম নেই, বাদ গেছে` : ''}`); view.sel = null; closeSheet(); render(); },
+  selStatusDo(st) { let skip = 0; Object.keys(view.sel || {}).forEach(id => { const o = S.orders[id]; if (o && o.status !== st && st === 'Shipped' && (!itemsOk(o) || stockShort(o).length)) { skip++; return; } if (o && o.status !== st) { o.status = st; save('orders', o, true, `অর্ডার #${o.no} → ${st}`); } }); toast(`✓ ${Object.keys(view.sel).length - skip} টা → ${STBN[st]}${skip ? ` · ${skip} টায় আইটেম নেই, বাদ গেছে` : ''}`); view.sel = null; closeSheet(); render(); },
 
   /* ---------- courier ---------- */
   cq(q) { view.cq = q; renderCourierResults(); },
@@ -436,7 +445,7 @@ const A = {
   },
   doReset() {
     if (!isOwner()) return; let k = 0;
-    COLLS.forEach(c => { if (c === 'settings') return; Object.values(S[c]).forEach(r => { if (!r._d) { r._d = true; put(c, r); k++; } }); });
+    COLLS.forEach(c => { if (c === 'settings' || c === 'chatSeen') return; Object.values(S[c]).forEach(r => { if (!r._d) { r._d = true; put(c, r); k++; } }); });
     logAct('সম্পূর্ণ সিস্টেম রিসেট (' + k + ' রেকর্ড)'); toast('✓ রিসেট হয়েছে (' + k + ' রেকর্ড)'); render();
   },
   csv() {
