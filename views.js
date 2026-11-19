@@ -40,22 +40,22 @@ function hsearchHtml() {
   return `<div class="muted" style="margin:2px 2px 8px">${L.length} টা পাওয়া গেছে (সব স্ট্যাটাস)</div>` + (L.slice(0, 20).map(orderCard).join('') || emptyBox('box', 'কিছু পাওয়া যায়নি')) + (L.length > 20 ? '<div class="muted">প্রথম ২০টা দেখানো হলো — আরও নির্দিষ্ট করে লিখুন</div>' : '');
 }
 function vHome() {
-  const r = view.range || 'month', a = agg(R, inR(r)), at = agg(R, inR('today')), s = snap(R), P = Object.values(R.prod);
+  const full = can('reports_full'), r = full ? (view.range || 'month') : 'today', TT = full ? 'মোট' : 'আজকের', a = agg(R, inR(r)), at = agg(R, inR('today')), s = snap(R), P = Object.values(R.prod);
   const ov = can('orders_view'), sv = can('sales_view'), cc = canCost(), cp = canProfit();
   const low = P.filter(x => x.status !== 'OK').sort((x, y) => x.stock - y.stock).slice(0, 8), top = [...P].sort((x, y) => y.sold - x.sold).filter(x => x.sold > 0).slice(0, 5);
-  const y = today().slice(0, 4), months = (ov || sv) ? [...Array(12)].map((_, i) => agg(R, d => (d || '').startsWith(y + '-' + String(i + 1).padStart(2, '0')))) : null;
+  const y = today().slice(0, 4), months = full && (ov || sv) ? [...Array(12)].map((_, i) => agg(R, d => (d || '').startsWith(y + '-' + String(i + 1).padStart(2, '0')))) : null;
   const hero = `<div class="hero"><small>${greet()} · ${fmtD(today())}</small><h1>${esc(cfg().shop)}</h1><div class="hst">${ov ? `<div><span>আজকের অর্ডার</span><b>${at.orders}</b></div>` : ''}${ov || sv ? `<div><span>আজকের বিক্রি</span><b>${money(at.sales)}</b></div>` : ''}${ov ? `<div><span>কুরিয়ারে</span><b>${a.withCourier}</b></div>` : ''}</div></div>`;
-  let h = (typeof webBanner === 'function' ? webBanner() : '') + (ov ? `<input class="search" id="hq" style="margin-bottom:10px" placeholder="🔎 যেকোনো অর্ডার খুঁজুন — নাম / ফোন / নং / কনসাইনমেন্ট (সব স্ট্যাটাস)" value="${esc(view.hq || '')}" oninput="view.hq=this.value;A.hsearch()"><div id="hres">${hsearchHtml()}</div>` : '') + hero + `<div class="chips sc" style="margin-top:14px">${RANGES.map(([k, l]) => `<button class="chip ${r === k ? 'on' : ''}" onclick="A.range('${k}')">${l}</button>`).join('')}</div>`;
+  let h = (typeof webBanner === 'function' ? webBanner() : '') + (ov ? `<input class="search" id="hq" style="margin-bottom:10px" placeholder="🔎 যেকোনো অর্ডার খুঁজুন — নাম / ফোন / নং / কনসাইনমেন্ট (সব স্ট্যাটাস)" value="${esc(view.hq || '')}" oninput="view.hq=this.value;A.hsearch()"><div id="hres">${hsearchHtml()}</div>` : '') + hero + (full ? `<div class="chips sc" style="margin-top:14px">${RANGES.map(([k, l]) => `<button class="chip ${r === k ? 'on' : ''}" onclick="A.range('${k}')">${l}</button>`).join('')}</div>` : '<div class="note" style="margin:12px 0 4px">📅 হোমে শুধু আজকের হিসাব দেখানো হচ্ছে</div>');
   if (ov) {
     const okP = P.filter(x => x.status === 'OK').length, lowP = P.filter(x => x.status === 'Low Stock').length, outP = P.length - okP - lowP;
     const recent = [...R.onl].sort((x, y) => n(y.o.no) - n(x.o.no)).slice(0, 5);
-    h += `<div class="sc4">${sc4('box', 'মোট অর্ডার', a.orders, 'ok', "A.nav('orders')")}${sc4('check', 'ডেলিভারড', a.delivered, 'ok', "A.repGo('','','Delivered')")}${sc4('list', 'পেন্ডিং/কনফার্ম', a.pending, 'am', "A.repGo('','','Pending')")}${sc4('swap', 'রিটার্ন', a.returned, 'err', "A.repGo('','','Returned')")}</div>`;
+    h += `<div class="sc4">${sc4('box', TT + ' অর্ডার', a.orders, 'ok', "A.nav('orders')")}${sc4('check', 'ডেলিভারড', a.delivered, 'ok', (full ? "A.repGo('','','Delivered')" : ''))}${sc4('list', 'পেন্ডিং/কনফার্ম', a.pending, 'am', full ? "A.repGo('','','Pending')" : '')}${sc4('swap', 'রিটার্ন', a.returned, 'err', full ? "A.repGo('','','Returned')" : '')}</div>`;
     h += `<div class="two"><div class="panel"><b class="ph">অর্ডার ওভারভিউ</b>${donut([['ডেলিভারড', a.delivered, 'var(--b)'], ['কুরিয়ারে', a.withCourier, 'var(--am)'], ['পেন্ডিং', a.pending, 'var(--info)'], ['রিটার্ন', a.returned, 'var(--err)'], ['ক্যানসেল', Math.max(0, a.orders - a.delivered - a.withCourier - a.pending - a.returned), 'var(--gray)']], 'অর্ডার')}</div>`;
     h += canR('products') ? `<div class="panel"><b class="ph">স্টক ওভারভিউ</b>${donut([['ঠিক আছে', okP, 'var(--b)'], ['লো স্টক', lowP, 'var(--am)'], ['স্টক শেষ', outP, 'var(--err)']], 'প্রোডাক্ট')}</div>` : '';
     h += `</div><div class="panel"><div class="oh"><b class="ph">সাম্প্রতিক অর্ডার</b><a class="lnk" onclick="A.nav('orders')">সব দেখুন</a></div>${recent.map(({ o, r }) => `<div class="li rc" onclick="A.order('${o.id}')"><span class="av">${esc((o.customer || '?').trim().charAt(0).toUpperCase())}</span><div class="lm"><b>#${o.no} ${esc(o.customer || '')}</b><small>${fmtD(o.date)} · ${money(r.total)}</small></div>${badge(o.status)}</div>`).join('') || '<p class="muted">এখনো অর্ডার নেই</p>'}</div>`;
   }
   if (ov || sv || can('purchases_view') || can('expenses_view')) {
-    h += `<h3>পারফরম্যান্স</h3><div class="kg">${ov || sv ? kc('chart', 'মোট বিক্রি', money(a.sales)) : ''}${can('purchases_view') ? kc('cart', 'মোট ক্রয়', money(a.purchase)) : ''}${can('expenses_view') ? kc('receipt', 'মোট খরচ', money(a.exp)) : ''}${cp ? kc('wallet', 'নেট প্রফিট (কুরিয়ার/COD চার্জ বাদে)', money(a.booked), a.booked < 0 ? 'neg' : 'pos') + kc('check', 'রিয়েলাইজড প্রফিট (ডেলিভারড)', money(a.realized), a.realized < 0 ? 'neg' : 'pos') : ''}${cc ? kc('alert', 'ড্যামেজ/লস', money(a.dmg)) : ''}</div>`;
+    h += `<h3>পারফরম্যান্স</h3><div class="kg">${ov || sv ? kc('chart', TT + ' বিক্রি', money(a.sales)) : ''}${can('purchases_view') ? kc('cart', TT + ' ক্রয়', money(a.purchase)) : ''}${can('expenses_view') ? kc('receipt', TT + ' খরচ', money(a.exp)) : ''}${cp ? kc('wallet', 'নেট প্রফিট (কুরিয়ার/COD চার্জ বাদে)', money(a.booked), a.booked < 0 ? 'neg' : 'pos') + kc('check', 'রিয়েলাইজড প্রফিট (ডেলিভারড)', money(a.realized), a.realized < 0 ? 'neg' : 'pos') : ''}${cc ? kc('alert', 'ড্যামেজ/লস', money(a.dmg)) : ''}</div>`;
     if (cp && ov) h += `<h3>ডেলিভারড ও কুরিয়ার চার্জ</h3><div class="kg">${kc('check', 'ডেলিভারড প্রফিট (শুধু প্রোডাক্ট)', money(a.dProfit), a.dProfit < 0 ? 'neg' : 'pos')}${kc('wallet', 'ডেলিভারড নেট প্রফিট', money(a.dNet), a.dNet < 0 ? 'neg' : 'pos')}${kc('truck', 'কুরিয়ার চার্জ', money(a.courier))}${kc('receipt', 'COD চার্জ + আলাদা ফি', money(a.codFee + a.cfee))}${a.retInc ? kc('swap', 'রিটার্নে পাওয়া চার্জ', money(a.retInc), 'pos') : ''}</div><p class="note">ডেলিভারড প্রফিট = শুধু ডেলিভারড অর্ডারের (বিক্রয়মূল্য − কেনা দাম)। ডেলিভারড নেট = ডেলিভারড গ্রস − কুরিয়ার চার্জ − COD চার্জ − ফি + রিটার্ন চার্জ − খরচ − ড্যামেজ।</p>`;
     if (!cp && (ov || sv)) h += lockNote('প্রফিটের হিসাব');
   }
@@ -70,7 +70,7 @@ function vHome() {
     const assets = s.cash + s.stockValue + s.courierValue + s.codDue + s.customerDue + s.givenOut;
     h += `<div class="panel"><b>মোট ব্যবসার মূল্য</b><div class="pr"><span class="muted">ক্যাশ + স্টক + কুরিয়ারে পণ্য + COD পাওনা + কাস্টমার বাকি + দেওয়া লোন</span><b>${money(assets)}</b></div><div class="pr"><span>− সাপ্লায়ার দেনা</span><b>${money(-s.supplierPayable)}</b></div><div class="pr tot"><span>নিট মূল্য</span><b>${money(assets - s.supplierPayable)}</b></div></div>`;
   }
-  if (ov) h += `<h3>অর্ডার</h3><div class="kg">${kc('truck', 'কুরিয়ারে পার্সেল', a.withCourier, '', "A.repGo('','','Shipped')")}${kc('alert', 'লো/আউট স্টক', P.filter(x => x.status !== 'OK').length, '', "A.nav('products')")}</div>`;
+  if (ov) h += `<h3>অর্ডার</h3><div class="kg">${kc('truck', 'কুরিয়ারে পার্সেল', a.withCourier, '', full ? "A.repGo('','','Shipped')" : '')}${full ? '' : kc('x', 'আজ ক্যানসেল', R.onl.filter(x => x.o.date === today() && x.o.status === 'Cancelled').length)}${kc('alert', 'লো/আউট স্টক', P.filter(x => x.status !== 'OK').length, '', "A.nav('products')")}</div>`;
   if (months) h += `<h3>মাসওয়ারি বিক্রি (${y})</h3><div class="panel">${chartSvg(months, cp)}</div>`;
   if (canR('products')) {
     h += `<h3>টপ সেলিং</h3><div class="panel">${top.map(x => `<div class="li"><span>${esc(x.p.name)}</span><b>${x.sold} পিস</b></div>`).join('') || '<p class="muted">এখনো বিক্রি নেই</p>'}</div>`;
@@ -252,7 +252,7 @@ function vReports() {
 
 /* ---------- more menu, staff, logs, login ---------- */
 function vMore() {
-  const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_view'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['team', 'chart', 'টার্গেট ও স্যালারি', 'orders_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
+  const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_full'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['team', 'chart', 'টার্গেট ও স্যালারি', 'orders_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
   const who = profile ? `${esc(profile.name || '')} · ${profile.local ? 'লোকাল মোড' : profile.role === 'owner' ? 'Owner' : 'স্টাফ'}` : '';
   return head('আরও', '') + `<div class="grid">${items.map(([k, i, l]) => `<button class="gi" onclick="A.nav('${k}')"><span>${ico(i, 24)}</span>${l}</button>`).join('')}</div>` +
     (isOwner() ? `<button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="A.labelSheet([],1)">${ico('printer', 18)} লেবেল ডিজাইন</button>` : '') + `<button class="btn ghost" style="width:100%" onclick="A.settings()">${ico('gear', 18)} সেটিংস, থিম ও ব্যাকআপ</button><p class="note" style="text-align:center">${who}</p><p class="note" style="text-align:center">Copyright © MD NURNABI</p>`;
@@ -290,11 +290,14 @@ Object.assign(A, {
 
 /* ---------- router ---------- */
 const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, chat: vChat, team: vTeam };
-const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_view', staff: '#owner', logs: '#owner', team: 'orders_view' };
+const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_full', staff: '#owner', logs: '#owner', team: 'orders_view' };
 const allowed = v => !NEED[v] || (NEED[v] === '#owner' ? isOwner() : can(NEED[v]));
 let lastView = '';
 function render() {
-  D = mergeState(S); R = calc(D);
+  D = mergeState(S);
+  const fullStock = canR('products') && canR('purchases') && canR('sales') && canR('damages'), sb = (D.settings.main || {}).stockBase || null;
+  R = calc(D, fullStock ? null : sb); R.unk = !fullStock && !sb;      // staff without purchase/sales/damage access use the owner's published stock numbers (no prices inside)
+  if (isOwner()) stockPublish();
   const locked = !!cloudCfg() && !profile, el = $('#main'), st = el.scrollTop;
   let v = (location.hash || '#home').slice(1).split('?')[0]; if (!VIEWS[v] || !allowed(v)) v = 'home';
   $('#shopname').textContent = 'BiM Manager'; $('#gearbtn').innerHTML = ico('gear', 19); $('#gearbtn').style.display = locked ? 'none' : '';

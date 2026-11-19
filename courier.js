@@ -53,7 +53,7 @@ Object.assign(A, {
     if (!itemsOk(o)) return toast('আইটেম ও পরিমাণ দিন, তারপর বুক করুন');
     if (stockBlock(o)) return;
     const r = R.O[id] || { total: 0 }, phone = String(o.phone || '').replace(/\D/g, '').replace(/^88(?=01)/, ''), addr = String(o.address || '').trim();
-    const cod = o.pay === 'Cash on Delivery' ? Math.max(Math.round(r.total - n(o.advance)), 0) : 0;
+    const cod = (o.pay === 'Cash on Delivery' || !o.pay) ? Math.max(Math.round(r.total - n(o.advance)), 0) : 0;
     const bad = !o.customer ? 'কাস্টমারের নাম নেই' : !/^01[3-9]\d{8}$/.test(phone) ? 'ফোন নম্বর ঠিক নেই (১১ ডিজিট)' : addr.length < 5 ? 'ঠিকানা নেই' : !r.total ? 'বিলের পরিমাণ ০ — আইটেম বা বিল দিন' : '';
     if (bad) return toast('বুক করা যাচ্ছে না: ' + bad);
     const dp = dupOrders(o).filter(isSent); if (dp.length && !confirm(`⚠ ডুপ্লিকেট সতর্কতা!\n\nএই নম্বর (${phone}) দিয়ে আগেই পার্সেল দেওয়া হয়েছে:\n${dupTxt(dp)}\n\nতবুও #${o.no} আবার বুক করবেন?`)) return;

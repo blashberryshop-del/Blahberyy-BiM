@@ -382,12 +382,12 @@ const A = {
     const grp = PM.GROUPS.map(g => `<div class="lbl" style="margin-top:12px"><b>${g.t}</b></div>${g.items.map(i => `<label class="chk"><input type="checkbox" data-p="${i[0]}" ${initP[i[0]] ? 'checked' : ''} onchange="A.pchg(this)"> ${i[1]}</label>`).join('')}`).join('');
     sheet(id ? 'স্টাফ এডিট' : 'নতুন স্টাফ / মডারেটর', fld('name', 'নাম', 'text', s.name) + fld('join', '📅 জয়েনিং তারিখ', 'date', s.join || '') + `<div class="row2">${fld('salary', '💰 মাসিক বেতন (৳)', 'number', s.salary || '')}${fld('payDay', 'বেতনের তারিখ (মাসের)', 'number', s.payDay || '', 0, 'min="1" max="31"')}</div>` + (id ? `<div class="os">${esc(s.email || '')}</div>` : fld('email', 'ইমেইল (লগইনের জন্য)', 'email', '') + fld('password', 'পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)', 'text', '')) +
       fld('preset', 'রোল প্রিসেট', 'select', pre, Object.entries(PM.PRESETS).map(([k, v]) => [k, v.label]), 'onchange="A.ppre(this.value)"') + `<p class="note">টিক দেওয়া জিনিসগুলোই স্টাফ দেখতে/করতে পারবে। 🔒 চিহ্নিত তথ্য টিক না দিলে সার্ভার থেকেই পাবে না (শুধু স্ক্রিন থেকে লুকানো নয়)।</p>${grp}` +
-      (id ? `<hr><label class="chk"><input type="checkbox" data-k="active" ${s.active !== false ? 'checked' : ''}> অ্যাকাউন্ট চালু</label><button class="btn ghost sm" onclick="A.resetPw('${esc(s.email)}')">পাসওয়ার্ড রিসেট ইমেইল পাঠান</button>` : ''), async d => {
+      (id ? `<hr><label class="chk"><input type="checkbox" data-k="active" ${s.active !== false ? 'checked' : ''}> অ্যাকাউন্ট চালু</label><div class="btnrow"><button class="btn ghost sm" onclick="A.resetPw('${esc(s.email)}')">পাসওয়ার্ড রিসেট ইমেইল পাঠান</button><button class="btn ghost sm" onclick="A.staffInvite('${esc(s.name)}','${esc(s.email)}','')">📤 লগইন বার্তা (WhatsApp)</button><button class="btn ghost sm" style="color:var(--err)" onclick="A.staffDel('${id}')">🗑 স্টাফ মুছুন</button></div>` : ''), async d => {
         const v = vals(d), perms = {}; d.querySelectorAll('[data-p]').forEach(i => { if (i.checked) perms[i.dataset.p] = true; });
         if (!v.name) { toast('নাম দিন'); return false; }
         try {
           if (id) { await SY.db.doc(`shops/${SY.shop}/staff/${id}`).update({ name: v.name, perms: PM.fix(perms), active: !!v.active, join: v.join || '', salary: +v.salary || 0, payDay: +v.payDay || 0 }); logAct('স্টাফ আপডেট: ' + v.name); toast('✓ আপডেট হয়েছে'); }
-          else { if (!v.email || (v.password || '').length < 6) { toast('ইমেইল ও ৬+ অক্ষরের পাসওয়ার্ড দিন'); return false; } toast('অ্যাকাউন্ট খোলা হচ্ছে…'); await createStaff({ name: v.name, email: v.email, password: v.password, perms, join: v.join, salary: v.salary, payDay: v.payDay }); toast('✓ স্টাফ যোগ হয়েছে — সেটআপ কোডসহ ইমেইল/পাসওয়ার্ড তাকে দিন'); }
+          else { if (!v.email || (v.password || '').length < 6) { toast('ইমেইল ও ৬+ অক্ষরের পাসওয়ার্ড দিন'); return false; } toast('অ্যাকাউন্ট খোলা হচ্ছে…'); await createStaff({ name: v.name, email: v.email, password: v.password, perms, join: v.join, salary: v.salary, payDay: v.payDay }); toast('✓ স্টাফ যোগ হয়েছে'); setTimeout(() => A.staffInvite(v.name, v.email, v.password), 350); }
         } catch (e) { toast('ত্রুটি: ' + (e.message || e.code)); return false; }
       });
   },
@@ -397,6 +397,21 @@ const A = {
     if (el.checked && PM.IMPLIES[k]) q(PM.IMPLIES[k]).checked = true;
     if (!el.checked) Object.keys(PM.IMPLIES).forEach(d => { if (PM.IMPLIES[d] === k && q(d)) q(d).checked = false; });
     document.querySelector('#sheet [data-k=preset]').value = 'custom';
+  },
+  async staffDel(id) {                              // removes the person's access (their staff record + notification devices); old orders keep their name
+    if (!isOwner() || !id) return; const s = SY.staff[id]; if (!s) return; if (id === SY.uid) return toast('নিজেকে মুছা যাবে না');
+    if (!confirm(`"${s.name}" কে স্টাফ তালিকা থেকে মুছবেন?\n\n• সে আর অ্যাপে ঢুকতে পারবে না ও নোটিফিকেশন পাবে না\n• তার আগের অর্ডার/মেসেজ যেমন আছে তেমনই থাকবে\n• (শুধু সাময়িক বন্ধ করতে চাইলে মুছে নয়, "অ্যাকাউন্ট চালু" টিক তুলে দিন)`)) return;
+    try {
+      try { const q = await SY.db.collection(`shops/${SY.shop}/pushSubs`).where('uid', '==', id).get(); await Promise.all(q.docs.map(d => d.ref.delete())); } catch (e) { }
+      await SY.db.doc(`shops/${SY.shop}/staff/${id}`).delete(); logAct('স্টাফ মুছে ফেলা: ' + (s.name || '')); closeSheet(); toast('✓ স্টাফ মুছে ফেলা হয়েছে'); if (typeof rosterSync === 'function') setTimeout(rosterSync, 800);
+    } catch (e) { toast('মুছা যায়নি: ' + (e.message || e.code)); }
+  },
+  staffInvite(name, email, pw) {                    // one ready-to-send message: link + login + 2 setup steps. Owner taps WhatsApp or copy.
+    const link = location.origin + location.pathname + '#setup=' + setupCode();
+    const txt = `আসসালামু আলাইকুম ${name}!\nBiM Manager অ্যাপে আপনার অ্যাকাউন্ট তৈরি হয়েছে।\n\n১) এই লিংক ফোনের Chrome-এ খুলুন:\n${link}\n\n২) লগইন করুন —\nইমেইল: ${email}\n${pw ? 'পাসওয়ার্ড: ' + pw : 'পাসওয়ার্ড: (আগে যা দেওয়া হয়েছে; ভুলে গেলে লগইন পেজে "পাসওয়ার্ড ভুলে গেছি" চাপুন)'}\n\n৩) Chrome-এর ⋮ মেনু → "Add to Home screen" (বা "Install app") দিন — তাহলে অ্যাপের মতো চলবে।\n\n৪) অ্যাপ খুলে আরও → ⚙ সেটিংস → "নোটিফিকেশন" অংশে "এই ডিভাইস চালু করুন" চাপুন, তাহলে নতুন অর্ডার/মেসেজের নোটিফিকেশন পাবেন।`;
+    window._inv = txt;
+    sheet('📤 স্টাফকে পাঠান', `<p class="note">নিচের বার্তাটা একবারেই পাঠান — লিংক, লগইন আর সেটআপের ধাপ সব এতে আছে। পাসওয়ার্ড শুধু এখনই দেখা যায় (পরে আর দেখা যায় না)।</p><textarea readonly rows="12" style="width:100%;font-size:13px" onclick="this.select()">${esc(txt)}</textarea><div class="btnrow"><button class="btn ghost sm" onclick="navigator.clipboard.writeText(window._inv).then(()=>toast('✓ কপি হয়েছে'),()=>toast('কপি করা যায়নি — লেখাটা চেপে ধরে কপি করুন'))">📋 কপি</button></div>`,
+      () => { window.open('https://wa.me/?text=' + encodeURIComponent(window._inv), '_blank'); return false; }, '💬 WhatsApp-এ পাঠান');
   },
   async resetPw(email) { try { await firebase.auth().sendPasswordResetEmail(email); toast('ইমেইল পাঠানো হয়েছে'); } catch (e) { toast('ত্রুটি: ' + e.message); } },
 

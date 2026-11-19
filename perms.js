@@ -6,7 +6,7 @@
     { t: 'অফলাইন বিক্রি', items: [['sales_view', 'বিক্রি দেখা'], ['sales_edit', 'বিক্রি যোগ/এডিট, বাকি আদায়', 'sales_view']] },
     { t: 'প্রোডাক্ট ও স্টক', items: [['products_view', 'প্রোডাক্ট ও স্টক দেখা (স্টক হিসাবের জন্য অর্ডার/বিক্রির তালিকাও পড়া যাবে)'], ['products_edit', 'প্রোডাক্ট ও কম্বো যোগ/এডিট', 'products_view']] },
     { t: 'ড্যামেজ / লস', items: [['damages_view', 'ড্যামেজ দেখা'], ['damages_edit', 'ড্যামেজ এন্ট্রি', 'damages_view']] },
-    { t: 'রিপোর্ট', items: [['reports_view', 'সোর্স/এলাকা/স্ট্যাটাস রিপোর্ট', 'orders_view']] },
+    { t: 'রিপোর্ট', items: [['reports_full', 'সম্পূর্ণ রিপোর্ট — হোমের মোট/মাসের হিসাব ও রিপোর্ট পেজ (না দিলে শুধু আজকের হিসাব দেখবে)', 'orders_view']] },
     { t: 'ডিলিট', items: [['delete', 'ডিলিট করতে পারবে']] },
     { t: '🔒 সংবেদনশীল তথ্য', items: [
       ['costs_view', '🔒 কেনা দাম, স্টক ভ্যালু ও প্রফিট দেখা'], ['costs_edit', '🔒 কেনা দাম এডিট', 'costs_view'],
@@ -19,8 +19,8 @@
   const IMPLIES = {}; GROUPS.forEach(x => x.items.forEach(i => { if (i[2]) IMPLIES[i[0]] = i[2]; }));
   const PRESETS = {
     courier: { label: 'কুরিয়ার/প্যাকিং স্টাফ (অর্ডার দেখা + স্ট্যাটাস + লেবেল)', perms: ['orders_view', 'orders_status'] },
-    moderator: { label: 'মডারেটর (অর্ডার তোলা ও এডিট, রিপোর্ট)', perms: ['orders_view', 'orders_status', 'orders_edit', 'reports_view'] },
-    sales: { label: 'সেলস স্টাফ (অর্ডার, বিক্রি, স্টক)', perms: ['orders_view', 'orders_status', 'orders_edit', 'sales_view', 'sales_edit', 'products_view', 'reports_view'] },
+    moderator: { label: 'মডারেটর (অর্ডার তোলা ও এডিট; হোমে শুধু আজকের হিসাব)', perms: ['orders_view', 'orders_status', 'orders_edit'] },
+    sales: { label: 'সেলস স্টাফ (অর্ডার, বিক্রি, স্টক)', perms: ['orders_view', 'orders_status', 'orders_edit', 'sales_view', 'sales_edit', 'products_view'] },
     accounts: { label: 'হিসাব স্টাফ (সব দেখা, ডিলিট ছাড়া)', perms: ALL.filter(p => p !== 'delete') },
     custom: { label: 'কাস্টম', perms: [] }
   };

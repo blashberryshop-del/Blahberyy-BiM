@@ -11,7 +11,13 @@ function webMatch(it) {                                   // SKU = product/combo
   return c || '';
 }
 const webDone = id => Object.values(S.orders).some(o => o.webId === id);
+let _fixPay = 0;
+function webFixPay() {                                    // orders brought in by v26/v27 had no payment type, so they looked "paid" (COD 0) — make them Cash on Delivery
+  if (_fixPay || !can('orders_edit')) return; _fixPay = 1;
+  Object.values(S.orders).forEach(o => { if (o.webId && !o.pay && !o._d && !['Delivered', 'Cancelled', 'Returned'].includes(o.status)) { o.pay = 'Cash on Delivery'; put('orders', o); } });
+}
 async function webPoll(force) {
+  webFixPay();
   try {
     if (WEB.busy || !can('orders_edit') || !navigator.onLine || (document.hidden && !force) || !profile || profile.local) return;
     const t = TEAM(); if (!t) return; if (!force && Date.now() - WEB.t < 45000) return; WEB.busy = true;
@@ -33,8 +39,8 @@ function webCreate(w) {
   if (webDone(w.id)) return null;
   const items = [], miss = [];
   (w.items || []).forEach(i => { const c = webMatch(i); if (c) { const ex = items.find(x => x.code === c); const price = +i.price || n(R.sellPrice(c)); if (ex) ex.qty += i.qty; else items.push({ code: c, qty: i.qty, price }); } else miss.push((i.name || i.sku) + '×' + i.qty); });
-  const note = [w.note, miss.length ? '⚠ প্রোডাক্ট মেলেনি: ' + miss.join(', ') : '', w.pay ? 'পেমেন্ট: ' + w.pay : ''].filter(Boolean).join(' | ');
-  const o = { id: uid(), no: nextNo(), date: today(), status: 'Pending', customer: w.name || '', phone: w.phone || '', address: w.address || '', source: 'Website', webId: w.id, items, note, by: (profile && profile.name) || '', byUid: (profile && profile.uid) || '', byAt: Date.now() };
+  const note = [w.note, miss.length ? '⚠ প্রোডাক্ট মেলেনি: ' + miss.join(', ') : '', w.pay && !/cash|cod|ক্যাশ/i.test(w.pay) ? '⚠ ওয়েবসাইটের পেমেন্ট: ' + w.pay + ' — আগে টাকা পেলে পেমেন্ট ও অগ্রিম ঠিক করুন' : ''].filter(Boolean).join(' | ');
+  const o = { id: uid(), no: nextNo(), date: today(), status: 'Pending', pay: 'Cash on Delivery', customer: w.name || '', phone: w.phone || '', address: w.address || '', source: 'Website', webId: w.id, items, note, by: (profile && profile.name) || '', byUid: (profile && profile.uid) || '', byAt: Date.now() };
   if (w.delivery) o.delivery = w.delivery;
   if (!items.length && w.total) o.bill = w.total;
   save('orders', o, true, `ওয়েব অর্ডার #${o.no}`); return o;

@@ -217,8 +217,8 @@ function fld(k, label, type = 'text', val = '', opts, attrs = '') {
 function vals(el) { const o = {}; el.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? (i.value === '' ? '' : parseFloat(i.value)) : i.value.trim()); return o; }
 function codeList(onlyProd, sellMode) {
   const keep = new Set(view.keep || []);                                // codes already inside this order stay selectable
-  const l = Object.values(R.prod).map(x => `<option value="${esc(x.p.code)}">${esc(x.p.name)}${sellMode ? ' · স্টক ' + x.stock : ''}</option>`);
-  if (!onlyProd) Object.values(R.combos).forEach(c => l.push(`<option value="${esc(c.code)}">📦 ${esc(c.name)}${sellMode ? ' · বানানো যাবে ' + comboMake(c) : ''}</option>`));
+  const l = Object.values(R.prod).map(x => `<option value="${esc(x.p.code)}">${esc(x.p.name)}${sellMode && !R.unk ? ' · স্টক ' + x.stock : ''}</option>`);
+  if (!onlyProd) Object.values(R.combos).forEach(c => l.push(`<option value="${esc(c.code)}">📦 ${esc(c.name)}${sellMode && !R.unk ? ' · বানানো যাবে ' + comboMake(c) : ''}</option>`));
   return `<datalist id="codes">${l.join('')}</datalist>`;
 }
 function lineRow(it = {}, mode = 'sell', showRet) {
@@ -245,7 +245,17 @@ function callTag(o) {
 }
 const imgOf = code => (R.prod[code] && R.prod[code].p.img) || (R.combos[code] && R.combos[code].img) || '';
 const comboMake = c => Math.min(...(c.items || []).map(i => R.prod[i.code] ? Math.floor(R.prod[i.code].stock / (n(i.qty) || 1)) : 0), 9999);
-const stockShort = o => {                                              // items whose quantity is more than the shelf has (only meaningful until the order leaves for the courier)
+let _spT = 0;
+function stockPublish() {                                // owner's device publishes "stock before orders" per product (numbers only, no prices) so moderators' stock-out check is right
+  try {
+    if (!R || !navigator.onLine || !Object.keys(S.products || {}).length) return;
+    const b = {}; Object.keys(R.prod).forEach(c => { b[c] = R.prod[c].stock + R.prod[c].on; });
+    const cur = (D.settings.main || {}).stockBase || {}, ks = Object.keys(b); if (ks.length === Object.keys(cur).length && ks.every(k => cur[k] === b[k])) return;
+    clearTimeout(_spT); _spT = setTimeout(() => { try { put('settings', Object.assign({ id: 'main' }, D.settings.main, { stockBase: b, stockAt: Date.now() })); /* put, not save: no activity-log entry */ } catch (e) { } }, 4000);
+  } catch (e) { }
+}
+const stockShort = o => {
+  if (R.unk) return [];                                  // moderator device without published stock numbers yet: never show a false "stock out"                                              // items whose quantity is more than the shelf has (only meaningful until the order leaves for the courier)
   if (['Shipped', 'Delivered', 'Return Pending', 'Returned', 'Cancelled'].includes(o.status)) return [];
   const need = {}; (o.items || []).forEach(i => R.expand(i.code, n(i.qty)).forEach(([c, q]) => { need[c] = (need[c] || 0) + q; }));
   return Object.keys(need).filter(c => R.prod[c] && need[c] > R.prod[c].stock).map(c => ({ code: c, name: R.prod[c].p.name, need: need[c], have: Math.max(R.prod[c].stock, 0) }));

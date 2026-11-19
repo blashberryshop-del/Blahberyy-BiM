@@ -97,7 +97,7 @@
   }
 
   /* ---------- main calculation ---------- */
-  function calc(S) {
+  function calc(S, base) {                         // base = {code: stock before orders} published by the owner, for staff who cannot read purchases / sales / damages
     const prod = {}, combos = {};
     live(S, 'products').forEach(p => prod[p.code] = { p, pq: 0, pc: 0, off: 0, on: 0, dmg: 0, tr: 0 });
     live(S, 'combos').forEach(c => combos[c.code] = c);
@@ -161,7 +161,7 @@
     onl.forEach(({ o, r }) => { if (REV(o.status)) { r.cost = (o.items || []).reduce((s, i) => s + Math.max(n(i.qty) - n(i.ret), 0) * unitCost(i.code), 0); r.profit = r.rev - r.cost; } });
     off.forEach(({ s, r }) => { r.cost = (s.items || []).reduce((a, i) => a + Math.max(n(i.qty) - n(i.ret), 0) * unitCost(i.code), 0); });
     Object.values(prod).forEach(x => {
-      x.stock = n(x.p.openStock) + x.pq - x.off - x.on - x.dmg;
+      const bk = x.p.code; x.stock = base && base[bk] !== undefined ? n(base[bk]) - x.on : n(x.p.openStock) + x.pq - x.off - x.on - x.dmg;
       x.value = Math.max(x.stock, 0) * x.avg;
       x.trValue = x.tr * x.avg;
       x.status = x.stock <= 0 ? 'Out of Stock' : x.stock <= n(x.p.min) ? 'Low Stock' : 'OK';
