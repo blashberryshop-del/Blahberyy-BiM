@@ -39,7 +39,7 @@ Object.assign(A, {
       const p = await (await fetch(c.url.replace(/\/+$/, '') + '/ping')).json().catch(() => null);
       if (!p || !p.service) return toast('এই URL BlashBerry Worker নয়');
       if (!p.configured) return toast('Worker আছে, কিন্তু কী/টোকেন সেটআপ বাকি');
-      const b = await API.call('/balance', null, c); toast(`✓ সংযোগ ঠিক — Steadfast ব্যালেন্স ${money(b.balance)}`);
+      const b = await API.call('/balance', null, c); toast(`✓ সংযোগ ঠিক — ব্যালেন্স ${money(b.balance)} · ওয়েব ইনবক্স ${p.web ? '✓' : '✗'} · ওয়েবসাইট সিঙ্ক ${p.woo === undefined ? '✗ (worker.js পুরনো — নতুনটা Deploy করুন)' : p.woo ? '✓' : '✗ (WOO_URL/KEY/SECRET বসেনি বা Deploy হয়নি)'}`);
     } catch (e) { toast('✗ ' + e.message); }
   },
 

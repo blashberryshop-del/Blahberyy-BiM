@@ -1,3 +1,4 @@
+const APP_VERSION = '1.1.6';
 /* BlashBerry — app core: state, storage, permissions, cloud sync, auth */
 const { ST, n, live, parseOrder, mapStatus, calc, agg, snap, ledger, normSource, matchSource, areaOf, mergeState, splitForSave, migrate, report, FIN_PAIR } = BB;
 const PM = BBPerms, COLLS = PM.COLLS;
@@ -73,7 +74,7 @@ function trackOrder(rec, act) {
   const h = rec.hist || (rec.hist = []), by = profile.name || '', t = Date.now();
   const add = e => { h.push(Object.assign({ t, by }, e)); if (h.length > 60) h.splice(0, h.length - 60); };
   if (act) add({ a: act, f: rec.status || '' });
-  else if (rec._ls === undefined) { if (!h.length) add({ a: 'created', to: rec.status || '' }); }
+  else if (rec._ls === undefined) { if (!h.length) add({ a: 'created', to: rec.status || '' }); if (rec.webId && rec.status && rec.status !== 'Pending' && typeof wooSync === 'function') wooSync(rec); }
   else {
     if (rec._ls !== (rec.status || '')) { add({ a: 'status', f: rec._ls, to: rec.status || '' }); if (typeof wooSync === 'function') wooSync(rec); }
     const sn = rec._sn;
