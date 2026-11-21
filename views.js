@@ -252,7 +252,7 @@ function vReports() {
 
 /* ---------- more menu, staff, logs, login ---------- */
 function vMore() {
-  const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_full'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['team', 'chart', 'টার্গেট ও স্যালারি', 'orders_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
+  const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_full'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['team', 'chart', 'টার্গেট ও স্যালারি', 'orders_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner'], ['trash', 'box', 'ডিলিট করা অর্ডার', 'delete']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
   const who = profile ? `${esc(profile.name || '')} · ${profile.local ? 'লোকাল মোড' : profile.role === 'owner' ? 'Owner' : 'স্টাফ'}` : '';
   return head('আরও', '') + `<div class="grid">${items.map(([k, i, l]) => `<button class="gi" onclick="A.nav('${k}')"><span>${ico(i, 24)}</span>${l}</button>`).join('')}</div>` +
     (isOwner() ? `<button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="A.labelSheet([],1)">${ico('printer', 18)} লেবেল ডিজাইন</button>` : '') + `<button class="btn ghost" style="width:100%" onclick="A.settings()">${ico('gear', 18)} সেটিংস, থিম ও ব্যাকআপ</button><p class="note" style="text-align:center">${who}</p><p class="note" style="text-align:center">Copyright © MD NURNABI</p>`;
@@ -264,6 +264,11 @@ function vStaff() {
     (!cl ? `<div class="panel"><b>আগে ক্লাউড সিঙ্ক চালু করুন</b><p class="note">স্টাফ অ্যাকাউন্ট ও পারমিশন সার্ভারে থাকে, তাই সেটিংসে Firebase যোগ করে লগইন করতে হবে। সেটআপ গাইডে ধাপগুলো আছে।</p></div>` : '') +
     (cl ? `<div class="btnrow" style="margin:0 0 12px"><button class="btn ghost sm" onclick="A.copyLink()">স্টাফের জন্য লিংক কপি</button><button class="btn ghost sm" onclick="A.copyCode()">সেটআপ কোড কপি</button><button class="btn ghost sm" onclick="A.rules()">${ico('shield', 14)} সিকিউরিটি রুলস</button></div>` : '') +
     (L.map(s => { const ps = Object.keys(s.perms || {}).filter(k => s.perms[k]); return `<div class="oc" onclick="A.staffForm('${s.id}')"><div class="oh"><b>${esc(s.name || '')}</b><span class="bd ${s.active === false ? 'b-red' : 'b-green'}">${s.active === false ? 'বন্ধ' : 'চালু'}</span></div><div class="os">${esc(s.email || '')}</div><div class="os">${ps.length ? ps.slice(0, 6).map(p => `<span class="tag">${esc((PM.GROUPS.flatMap(g => g.items).find(i => i[0] === p) || [p, p])[1].replace(/\(.*$/, '').slice(0, 22))}</span>`).join('') + (ps.length > 6 ? `<span class="tag">+${ps.length - 6}</span>` : '') : 'কোনো পারমিশন নেই'}</div></div>`; }).join('') || (cl ? emptyBox('users', 'এখনো কোনো স্টাফ নেই') : ''));
+}
+function vTrash() {
+  if (!can('delete')) return '';
+  const L = Object.values(S.orders).filter(o => o._d).sort((a, b) => (b._u || 0) - (a._u || 0)).slice(0, 80);
+  return head('ডিলিট করা অর্ডার') + `<p class="note">ভুলে ডিলিট হলে এখান থেকে ফিরিয়ে আনুন — স্টক, বিক্রি ও প্রফিট আবার আগের মতো হিসাবে আসবে।</p>` + (L.map(o => { const dl = (o.hist || []).filter(e => e.a === 'deleted').pop(); return `<div class="oc"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b><span class="muted">${esc(o.phone || '')}</span></div><div class="os">স্ট্যাটাস ছিল: <b>${esc(STBN[o.status] || o.status || '')}</b>${dl ? ` · ডিলিট করেছেন: ${esc(dl.by || '?')} · ${fmtDT(dl.t)}` : ''}</div><div class="btnrow"><button class="btn sm" onclick="A.ordRestore('${o.id}')">↩ ফিরিয়ে আনুন</button><button class="btn ghost sm" onclick="A.history('${o.id}')">🕘 ইতিহাস</button></div></div>`; }).join('') || emptyBox('box', 'ডিলিট করা কোনো অর্ডার নেই'));
 }
 function vLogs() {
   if (!isOwner()) return '';
@@ -289,8 +294,8 @@ Object.assign(A, {
 });
 
 /* ---------- router ---------- */
-const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, chat: vChat, team: vTeam };
-const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_full', staff: '#owner', logs: '#owner', team: 'orders_view' };
+const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, trash: vTrash, chat: vChat, team: vTeam };
+const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_full', staff: '#owner', logs: '#owner', trash: 'delete', team: 'orders_view' };
 const allowed = v => !NEED[v] || (NEED[v] === '#owner' ? isOwner() : can(NEED[v]));
 let lastView = '';
 function render() {

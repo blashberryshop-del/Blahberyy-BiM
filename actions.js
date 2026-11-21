@@ -27,6 +27,16 @@ const A = {
   tab(k, v) { view[k] = v; render(); },
   range(r) { view.range = r; render(); },
   theme(v, el) { localStorage.bb_theme = v; applyTheme(); el.parentNode.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); },
+  history(id) {
+    const o = S.orders[id]; if (!o) return;
+    const ST_ = k => (typeof STBN !== 'undefined' && STBN[k]) || k || '—', AC = { created: '➕ অর্ডার তৈরি', deleted: '🗑 ডিলিট করা হয়েছে', restored: '↩ ফিরিয়ে আনা হয়েছে' };
+    const L = (o.hist || []).slice().reverse().map(e => {
+      const t = e.a === 'status' ? `🔀 <b>${esc(ST_(e.f))}</b> → <b>${esc(ST_(e.to))}</b>` : e.a === 'edit' ? `✏️ এডিট: ${esc(e.fields || '')}` : e.a === 'created' ? `${AC.created}${e.to ? ' (' + esc(ST_(e.to)) + ')' : ''}` : (AC[e.a] || esc(e.a)) + (e.f ? ` <small>(স্ট্যাটাস ছিল: ${esc(ST_(e.f))})</small>` : '');
+      return `<div class="li"><span>${t}<br><small>👤 ${esc(e.by || '?')}</small></span><small>${fmtDT(e.t)}</small></div>`;
+    }).join('') || '<div class="note">এখনো কোনো রেকর্ড নেই। এখন থেকে প্রতিটি স্ট্যাটাস বদল ও এডিট এখানে জমা হবে (পুরনো অর্ডারের আগের ইতিহাস নেই)।</div>';
+    sheet(`ইতিহাস · #${o.no}`, `<p class="note">বর্তমান স্ট্যাটাস: <b>${esc(ST_(o.status))}</b>${o.by ? ' · যোগ করেছেন: ' + esc(o.by) : ''}</p>` + L, null, 'বন্ধ');
+  },
+  ordRestore(id) { const o = S.orders[id]; if (!o || !can('delete')) return toast('অনুমতি নেই'); trackOrder(o, 'restored'); delete o._d; put('orders', o); logAct(`অর্ডার ফিরিয়ে আনা: #${o.no} ${o.customer || ''}`); toast('অর্ডার ফিরে এসেছে'); render(); },
   del(coll, id, sub) { if (confirm('ডিলিট করবেন?')) { remove(coll, id); if (sub) closeSheet(); } },
 
   /* ---------- FAB ---------- */
@@ -90,7 +100,7 @@ const A = {
       `<div class="row2">${fld('courier', 'কুরিয়ার', 'select', o.courier || '', cs, dis)}${fld('tracking', 'কনসাইনমেন্ট নং', 'text', o.tracking, 0, dis)}</div><div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn ghost sm" onclick="A.cpIn('tracking','কনসাইনমেন্ট নং')">${ico('copy', 14)} কনসাইনমেন্ট নং কপি</button></div>` +
       (can('costs_view') ? fld('charge', '🔒 কুরিয়ার চার্জ (আমাকে যা নেয়)', 'number', o.charge, 0, dis) + '<div class="panel" id="codrow"></div>' + fld('retCharge', '🔒 রিটার্নে কাস্টমারের দেওয়া ডেলিভারি চার্জ (আমার আয়)', 'number', o.retCharge, 0, dis) : '') +
       (id && R.O[id] && canProfit() && R.O[id].rev ? `<div class="panel"><div class="pr"><span>অর্ডার প্রফিট (প্রোডাক্ট: বিক্রি − কেনা দাম)</span><b>${money(R.O[id].profit)}</b></div>${R.O[id].codFee ? `<div class="pr"><span>COD চার্জ (কুরিয়ার কাটবে)</span><b>${money(R.O[id].codFee)}</b></div>` : ''}</div>` : '') +
-      (id ? `<div class="btnrow">${canBook(o) ? `<button class="btn sm" onclick="A.sfBook('${id}')">${ico('truck', 16)} Steadfast-এ বুক (সেভ করা তথ্য দিয়ে)</button>` : ''}<button class="btn ghost sm" onclick="A.labelSheet(['${id}'])">${ico('printer', 16)} লেবেল প্রিন্ট</button>${ed && can('delete') ? `<button class="btn red sm" onclick="A.del('orders','${id}',1)">ডিলিট</button>` : ''}</div>` : '');
+      (id ? `<div class="btnrow">${canBook(o) ? `<button class="btn sm" onclick="A.sfBook('${id}')">${ico('truck', 16)} Steadfast-এ বুক (সেভ করা তথ্য দিয়ে)</button>` : ''}<button class="btn ghost sm" onclick="A.history('${id}')">🕘 ইতিহাস</button><button class="btn ghost sm" onclick="A.labelSheet(['${id}'])">${ico('printer', 16)} লেবেল প্রিন্ট</button>${ed && can('delete') ? `<button class="btn red sm" onclick="A.del('orders','${id}',1)">ডিলিট</button>` : ''}</div>` : '');
     const dlg = sheet(id ? `অর্ডার #${o.no}` : 'নতুন অর্ডার', body, ed ? d => {
       const v = vals(d); if (!v.customer && !v.phone) { toast('নাম বা ফোন দিন'); return false; }
       const its = readLines(d);
@@ -455,13 +465,36 @@ const A = {
   },
   resetAll() {
     if (!isOwner()) return toast('শুধু Owner রিসেট করতে পারবেন'); view.bkDone = false;
-    sheet('⚠️ সম্পূর্ণ সিস্টেম রিসেট', `<div class="panel"><b>এতে সব অর্ডার, বিক্রি, ক্রয়, প্রোডাক্ট, খরচ, ক্যাশ, লোন, চ্যাট ইত্যাদির ডেটা মুছে যাবে — সবার ফোনেই।</b><p class="note">দোকানের সেটিংস (নাম, কুরিয়ার, COD চার্জ), স্টাফ ও লগইন থাকবে। আগে ব্যাকআপ নামান; পরে সেটিংস → ⬆ রিস্টোর দিয়ে ব্যাকআপ ফাইল দিলে সব ডেটা ফিরে আসবে।</p></div><div class="btnrow"><button class="btn sm" onclick="A.backup();view.bkDone=true;toast('✓ ব্যাকআপ নামানো হয়েছে — ফাইলটা সেভ করে রাখুন')">⬇ ১. আগে ব্যাকআপ নামান</button></div>` + fld('confirm', '২. নিশ্চিত করতে বড় অক্ষরে RESET লিখুন', 'text', ''),
-      d => { if (!view.bkDone) { toast('আগে ব্যাকআপ নামান'); return false; } if (String(vals(d).confirm || '').trim() !== 'RESET') { toast('নিশ্চিত করতে RESET লিখুন'); return false; } A.doReset(); }, 'রিসেট করুন');
+    const G = A.RESET_GROUPS.map(g => `<label class="chk" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" class="rsg" data-g="${g.k}" ${g.keep ? '' : 'checked'}><span><b>${g.t}</b><br><small class="muted">${g.d}</small></span></label>`).join('');
+    sheet('⚠️ ডেটা রিসেট — যা যা মুছবেন বাছুন', `<div class="panel"><b>টিক দেওয়া অংশের ডেটা মুছে যাবে — সবার ফোনেই।</b><p class="note">টিক ছাড়া অংশ যেমন আছে তেমন থাকবে। প্রোডাক্ট ও কম্বো তালিকা সাধারণত রেখে দেওয়াই ভালো (আবার একটা একটা করে বসাতে হয় না)। দোকানের সেটিংস, স্টাফ ও লগইন কখনোই মোছে না। আগে ব্যাকআপ নামান; পরে সেটিংস → ⬆ রিস্টোর দিলে ফেরত আসবে।</p></div><div class="btnrow"><button class="btn ghost sm" onclick="document.querySelectorAll('#sheet .rsg').forEach(x=>x.checked=true)">সব বাছুন</button><button class="btn ghost sm" onclick="document.querySelectorAll('#sheet .rsg').forEach(x=>x.checked=false)">কিছুই না</button><button class="btn ghost sm" onclick="document.querySelectorAll('#sheet .rsg').forEach(x=>x.checked=!/^(products|combos|suppliers)$/.test(x.dataset.g))">শুধু লেনদেন (তালিকা রেখে)</button></div><div id="rsl">${G}</div><div class="btnrow"><button class="btn sm" onclick="A.backup();view.bkDone=true;toast('✓ ব্যাকআপ নামানো হয়েছে — ফাইলটা সেভ করে রাখুন')">⬇ ১. আগে ব্যাকআপ নামান</button></div>` + fld('confirm', '২. নিশ্চিত করতে বড় অক্ষরে RESET লিখুন', 'text', ''),
+      d => {
+        const g = [...document.querySelectorAll('#sheet .rsg:checked')].map(x => x.dataset.g);
+        if (!g.length) { toast('কিছু বাছাই করা হয়নি'); return false; }
+        if (!view.bkDone) { toast('আগে ব্যাকআপ নামান'); return false; }
+        if (String(vals(d).confirm || '').trim() !== 'RESET') { toast('নিশ্চিত করতে RESET লিখুন'); return false; }
+        if (g.includes('products') && !g.includes('orders') && !confirm('প্রোডাক্ট তালিকা মুছছেন কিন্তু অর্ডার রাখছেন — পুরোনো অর্ডারের প্রোডাক্ট কোড তখন মিলবে না। তবুও চালিয়ে যাবেন?')) return false;
+        A.doReset(g);
+      }, 'রিসেট করুন');
   },
-  doReset() {
-    if (!isOwner()) return; let k = 0;
-    COLLS.forEach(c => { if (c === 'settings' || c === 'chatSeen') return; Object.values(S[c]).forEach(r => { if (!r._d) { r._d = true; put(c, r); k++; } }); });
-    logAct('সম্পূর্ণ সিস্টেম রিসেট (' + k + ' রেকর্ড)'); toast('✓ রিসেট হয়েছে (' + k + ' রেকর্ড)'); render();
+  RESET_GROUPS: [
+    { k: 'orders', t: '📦 অর্ডার', d: 'সব অর্ডার (পেন্ডিং, কুরিয়ারে, ডেলিভারড, ক্যানসেল…)', c: ['orders'] },
+    { k: 'sales', t: '🛍 অফলাইন বিক্রি', d: 'দোকান/সরাসরি বিক্রির এন্ট্রি', c: ['sales'] },
+    { k: 'purchases', t: '🛒 ক্রয় ও সাপ্লায়ার পেমেন্ট', d: 'কেনার এন্ট্রি ও সাপ্লায়ারকে দেওয়া টাকা', c: ['purchases', 'purchaseFin', 'supplierPayments'] },
+    { k: 'courierPay', t: '🚚 কুরিয়ার পেমেন্ট', d: 'কুরিয়ার থেকে টাকা পাওয়ার এন্ট্রি', c: ['courierPayments'] },
+    { k: 'expenses', t: '💸 খরচ', d: 'সব খরচের এন্ট্রি (বেতনসহ)', c: ['expenses'] },
+    { k: 'cash', t: '💵 ক্যাশ এন্ট্রি', d: 'ক্যাশ জমা/তোলা', c: ['cash'] },
+    { k: 'loans', t: '🏦 লোন', d: 'নেওয়া ও দেওয়া লোন এবং কিস্তি', c: ['loansTaken', 'loanPayments', 'loansGiven', 'loanCollections'] },
+    { k: 'damages', t: '⚠ ড্যামেজ/লস', d: 'নষ্ট বা হারানো পণ্যের এন্ট্রি', c: ['damages'] },
+    { k: 'chat', t: '💬 চ্যাট মেসেজ', d: 'সব গ্রুপের মেসেজ', c: ['chat'] },
+    { k: 'products', t: '🧴 প্রোডাক্ট তালিকা', d: 'প্রোডাক্ট, ওপেনিং স্টক, কেনা/বিক্রির দাম ও ছবি সহ', c: ['products', 'productCosts'], keep: true },
+    { k: 'combos', t: '🎁 কম্বো তালিকা', d: 'কম্বো ও তাদের খরচ', c: ['combos', 'comboCosts'], keep: true },
+    { k: 'suppliers', t: '🏭 সাপ্লায়ার তালিকা', d: 'সাপ্লায়ারের নাম/ফোন', c: ['suppliers'], keep: true },
+  ],
+  doReset(groups) {
+    if (!isOwner()) return; let k = 0; const sel = new Set(groups || A.RESET_GROUPS.map(g => g.k)), cols = new Set();
+    A.RESET_GROUPS.forEach(g => { if (sel.has(g.k)) g.c.forEach(c => cols.add(c)); });
+    cols.forEach(c => { if (!S[c]) return; Object.values(S[c]).forEach(r => { if (!r._d) { r._d = true; put(c, r); k++; } }); });
+    logAct('ডেটা রিসেট: ' + A.RESET_GROUPS.filter(g => sel.has(g.k)).map(g => g.t.replace(/^\S+\s/, '')).join(', ') + ' (' + k + ' রেকর্ড)'); toast('✓ রিসেট হয়েছে (' + k + ' রেকর্ড)'); render();
   },
   csv() {
     const rows = [['Order No', 'Date', 'Customer', 'Phone', 'Address', 'Source', 'Status', 'Courier', 'Tracking', 'Total', 'Paid', 'Due']];

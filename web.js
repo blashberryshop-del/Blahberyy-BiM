@@ -55,3 +55,10 @@ Object.assign(A, {
 });
 setInterval(() => webPoll(false), 60000); setTimeout(() => webPoll(true), 6000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) webPoll(false); });
+
+/* tell the website (WooCommerce) when an order that came from it changes status */
+async function wooSync(o) {
+  if (!o.webId || !/^n\d+$/.test(o.webId) || o._d) return;
+  try { const t = TEAM(); if (!t) return; const r = await API.call('/woo-status', { ref: o.webId, status: o.status, note: 'BiM App: ' + o.status + ' (#' + o.no + ')' }, t); if (r && r.ok) toast('🌐 ওয়েবসাইটেও স্ট্যাটাস বদলেছে'); }
+  catch (e) { if (!/WOO_URL/.test(e.message || '')) toast('⚠ ওয়েবসাইটের স্ট্যাটাস বদলানো যায়নি: ' + (e.message || '')); }
+}

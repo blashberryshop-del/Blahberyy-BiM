@@ -65,7 +65,23 @@ function setProfile(p) {
 function pruneLocal() { if (!profile) return; COLLS.forEach(c => { if (!canR(c) && Object.keys(S[c]).length) S[c] = {}; }); persist(); }
 
 /* ---------- save / remove ---------- */
-function put(coll, rec) { rec._u = Date.now(); S[coll][rec.id] = rec; persist(); push(coll, rec); }
+/* ---------- per-order history ---------- */
+const HIST_F = { customer: 'নাম', phone: 'ফোন', address: 'ঠিকানা', note: 'নোট', pay: 'পেমেন্ট', charge: 'চার্জ', delivery: 'ডেলিভারি', source: 'সোর্স', cid: 'কনসাইনমেন্ট', cstatus: 'কুরিয়ার স্ট্যাটাস', call: 'কল' };
+function ordSnap(o) { const x = {}; Object.keys(HIST_F).forEach(k => { x[k] = o[k] == null ? '' : String(o[k]).slice(0, 80); }); x.items = JSON.stringify(o.items || o.lines || '').slice(0, 300); return x; }
+function trackOrder(rec, act) {
+  if (!profile) return;
+  const h = rec.hist || (rec.hist = []), by = profile.name || '', t = Date.now();
+  const add = e => { h.push(Object.assign({ t, by }, e)); if (h.length > 60) h.splice(0, h.length - 60); };
+  if (act) add({ a: act, f: rec.status || '' });
+  else if (rec._ls === undefined) { if (!h.length) add({ a: 'created', to: rec.status || '' }); }
+  else {
+    if (rec._ls !== (rec.status || '')) { add({ a: 'status', f: rec._ls, to: rec.status || '' }); if (typeof wooSync === 'function') wooSync(rec); }
+    const sn = rec._sn;
+    if (sn) { const nw = ordSnap(rec), ch = Object.keys(nw).filter(k => k !== 'items' && sn[k] !== nw[k]).map(k => HIST_F[k]); if (sn.items !== nw.items) ch.push('আইটেম'); if (ch.length) add({ a: 'edit', fields: ch.join(', ') }); }
+  }
+  rec._ls = rec.status || ''; rec._sn = ordSnap(rec);
+}
+function put(coll, rec) { if (coll === 'orders') { try { trackOrder(rec); } catch (e) { } } rec._u = Date.now(); S[coll][rec.id] = rec; persist(); push(coll, rec); }
 function save(coll, rec, quiet, logText) {
   if (!rec.id) rec.id = uid();
   const parts = splitForSave(coll, rec), base = parts[0].coll;
@@ -78,7 +94,7 @@ function save(coll, rec, quiet, logText) {
 }
 function remove(coll, id) {
   if (!can('delete')) return toast('ডিলিটের অনুমতি নেই');
-  [coll, FIN_PAIR[coll]].filter(Boolean).forEach(c => { const r = S[c][id]; if (r && canW(c)) { r._d = true; put(c, r); } });
+  [coll, FIN_PAIR[coll]].filter(Boolean).forEach(c => { const r = S[c][id]; if (r && canW(c)) { if (c === 'orders') trackOrder(r, 'deleted'); r._d = true; put(c, r); } });
   logAct(`${COLN[coll] || coll} ডিলিট: ${recLabel(coll, (D && D[coll] && D[coll][id]) || { id })}`); render();
 }
 const COLN = { orders: 'অর্ডার', sales: 'বিক্রি', purchases: 'ক্রয়', products: 'প্রোডাক্ট', combos: 'কম্বো', suppliers: 'সাপ্লায়ার', supplierPayments: 'সাপ্লায়ার পেমেন্ট', courierPayments: 'কুরিয়ার পেমেন্ট', expenses: 'খরচ', damages: 'ড্যামেজ', cash: 'ক্যাশ', loansTaken: 'নেওয়া লোন', loanPayments: 'লোন পরিশোধ', loansGiven: 'দেওয়া লোন', loanCollections: 'লোন আদায়', settings: 'সেটিংস' };
