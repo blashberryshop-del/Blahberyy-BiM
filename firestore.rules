@@ -77,7 +77,7 @@ service cloud.firestore {
         allow create: if (can(shop, 'orders_edit')) && delOk(shop);
         // 'status only' staff may change just these fields on an existing order
         allow update: if ((can(shop, 'orders_edit')) && delOk(shop))
-          || ((can(shop, 'orders_status')) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', 'flags', 'hist', '_ls', '_sn', '_u']));
+          || ((can(shop, 'orders_status')) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', 'flags', 'hist', '_ls', '_sn', '_wk', '_u']));
       }
 
       match /sales/{id} {

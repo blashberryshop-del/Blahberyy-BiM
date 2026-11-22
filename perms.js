@@ -52,7 +52,7 @@
   const canRead = (prof, c) => { const a = ACCESS[c]; return !!prof && (prof.role === 'owner' || a.r.includes('*') || a.r.some(p => has(prof, p))); };
   const canWrite = (prof, c) => { const a = ACCESS[c]; return !!prof && (prof.role === 'owner' || a.w.some(p => has(prof, p)) || (a.status || []).some(p => has(prof, p))); };
   // fields a 'status only' writer may change on an order (must match the generated rule)
-  const STATUS_FIELDS = ['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', 'flags', 'hist', '_ls', '_sn', '_u'];
+  const STATUS_FIELDS = ['status', 'printed', 'cstatus', 'call', 'callDate', 'callNote', 'callBy', 'callAt', 'cancelType', 'flags', 'hist', '_ls', '_sn', '_wk', '_u'];
   const fix = perms => { const o = Object.assign({}, perms); let ch = true; while (ch) { ch = false; Object.keys(IMPLIES).forEach(k => { if (o[k] && !o[IMPLIES[k]]) { o[IMPLIES[k]] = true; ch = true; } }); } return o; };
 
   /* ---------- Firestore security rules generated from ACCESS ---------- */

@@ -1,4 +1,4 @@
-const APP_VERSION = '1.1.6';
+const APP_VERSION = '1.1.8';
 /* BlashBerry — app core: state, storage, permissions, cloud sync, auth */
 const { ST, n, live, parseOrder, mapStatus, calc, agg, snap, ledger, normSource, matchSource, areaOf, mergeState, splitForSave, migrate, report, FIN_PAIR } = BB;
 const PM = BBPerms, COLLS = PM.COLLS;
@@ -74,12 +74,13 @@ function trackOrder(rec, act) {
   const h = rec.hist || (rec.hist = []), by = profile.name || '', t = Date.now();
   const add = e => { h.push(Object.assign({ t, by }, e)); if (h.length > 60) h.splice(0, h.length - 60); };
   if (act) add({ a: act, f: rec.status || '' });
-  else if (rec._ls === undefined) { if (!h.length) add({ a: 'created', to: rec.status || '' }); if (rec.webId && rec.status && rec.status !== 'Pending' && typeof wooSync === 'function') wooSync(rec); }
+  else if (rec._ls === undefined) { if (!h.length) add({ a: 'created', to: rec.status || '' }); }
   else {
-    if (rec._ls !== (rec.status || '')) { add({ a: 'status', f: rec._ls, to: rec.status || '' }); if (typeof wooSync === 'function') wooSync(rec); }
+    if (rec._ls !== (rec.status || '')) { add({ a: 'status', f: rec._ls, to: rec.status || '' }); }
     const sn = rec._sn;
     if (sn) { const nw = ordSnap(rec), ch = Object.keys(nw).filter(k => k !== 'items' && sn[k] !== nw[k]).map(k => HIST_F[k]); if (sn.items !== nw.items) ch.push('আইটেম'); if (ch.length) add({ a: 'edit', fields: ch.join(', ') }); }
   }
+  if (rec.webId && typeof wooSync === 'function') { const k = wooKey(rec); if (rec._wk === undefined ? k !== 'Pending' : rec._wk !== k) wooSync(rec, k); rec._wk = k; }
   rec._ls = rec.status || ''; rec._sn = ordSnap(rec);
 }
 function put(coll, rec) { if (coll === 'orders') { try { trackOrder(rec); } catch (e) { } } rec._u = Date.now(); S[coll][rec.id] = rec; persist(); push(coll, rec); }
@@ -249,7 +250,7 @@ function readLines(el) {
   return [...el.querySelectorAll('.ln')].map(r => ({ code: r.querySelector('.c').value.trim(), qty: n(r.querySelector('.q').value), price: r.querySelector('.p') ? n(r.querySelector('.p').value) : 0, ret: r.querySelector('.r') ? n(r.querySelector('.r').value) : 0 })).filter(i => i.code && i.qty);
 }
 /* ---------- confirmation-call workflow (order.call*, order.cancelType) ---------- */
-const CALLS = { ok: ['✅', 'কনফার্ম'], noans: ['📵', 'ধরেনি'], off: ['🔌', 'ফোন বন্ধ'], later: ['🕒', 'পরে জানাবে'], sched: ['📅', 'শিডিউল'], cancel: ['❌', 'ক্যানসেল চায়'] };
+const CALLS = { ok: ['✅', 'কনফার্ম'], noans: ['📵', 'ধরেনি'], off: ['🔌', 'ফোন বন্ধ'], later: ['🕒', 'পরে জানাবে'], sched: ['📅', 'শিডিউল'], cancel: ['❌', 'ক্যানসেল'] };
 const CANCELT = { call: 'কলে ক্যানসেল', courier: 'কুরিয়ার থেকে ক্যানসেল' };
 const CANCEL_ST = ['Cancelled', 'Return Pending', 'Returned'];
 const callDue = o => (o.call === 'sched' || o.call === 'later') && o.callDate && o.callDate <= today() && o.status === 'Pending';
