@@ -38,7 +38,8 @@ const A = {
     }).join('') || '<div class="note">এখনো কোনো রেকর্ড নেই। এখন থেকে প্রতিটি স্ট্যাটাস বদল ও এডিট এখানে জমা হবে (পুরনো অর্ডারের আগের ইতিহাস নেই)।</div>';
     sheet(`ইতিহাস · #${o.no}`, `<p class="note">বর্তমান স্ট্যাটাস: <b>${esc(ST_(o.status))}</b>${o.by ? ' · যোগ করেছেন: ' + esc(o.by) : ''}</p>` + L, null, 'বন্ধ');
   },
-  ordRestore(id) { const o = S.orders[id]; if (!o || !can('delete')) return toast('অনুমতি নেই'); trackOrder(o, 'restored'); delete o._d; put('orders', o); logAct(`অর্ডার ফিরিয়ে আনা: #${o.no} ${o.customer || ''}`); toast('অর্ডার ফিরে এসেছে'); render(); },
+  backToCall(id) { const o = S.orders[id]; if (!o) return; if (!confirm(`#${o.no} ${o.customer || ''} — কলের ফল মুছে অর্ডারটা অর্ডার পেজের "কল বাকি"-তে ফেরত নেবেন?`)) return; A.status(id, 'Pending', false); view.ocall = 'todo'; },
+  ordRestore(id) { const o = S.orders[id]; if (!o || !(can('delete') || isOwner())) return toast('অনুমতি নেই'); if (!isOwner() && !delByMe(o)) return toast('শুধু যে ডিলিট করেছে সে বা Owner ফেরাতে পারবে'); trackOrder(o, 'restored'); delete o._d; put('orders', o); logAct(`অর্ডার ফিরিয়ে আনা: #${o.no} ${o.customer || ''}`); toast('অর্ডার ফিরে এসেছে'); render(); },
   del(coll, id, sub) { if (confirm('ডিলিট করবেন?')) { remove(coll, id); if (sub) closeSheet(); } },
 
   /* ---------- FAB ---------- */
@@ -52,10 +53,12 @@ const A = {
     const o = S.orders[id]; if (!o || o.status === st) return; if (!can('orders_status')) return toast('স্ট্যাটাস বদলের অনুমতি নেই');
     if (st === 'Shipped' && !itemsOk(o)) return A.needItems(o);
     if (st === 'Shipped' && stockBlock(o)) return;   // confirming without items is fine (it waits in Entry); sending to the courier needs items
-    const prev = o.status, prevCT = o.cancelType; o.status = st;
+    if (st === 'Pending' && (o.cid || ['Shipped', 'Delivered'].includes(o.status)) && !confirm(`#${o.no} কুরিয়ারে চলে গেছে — তবুও পেন্ডিংয়ে ফেরত নেবেন?`)) return false;
+    const prev = o.status, prevCT = o.cancelType, prevCall = { call: o.call, callDate: o.callDate, callNote: o.callNote, callAt: o.callAt, callBy: o.callBy }; o.status = st;
+    if (st === 'Pending') { Object.assign(o, { call: '', callDate: '', callNote: '', callAt: 0, callBy: '', cancelType: '' }); }   // back to "কল বাকি" so it shows up in the Orders page call-pending list again
     if (st === 'Cancelled' && !o.cancelType) o.cancelType = (o.tracking || o.cid) ? 'courier' : 'call';   // cancelled after it went to the courier vs at the confirmation call
     save('orders', o, quiet, `অর্ডার #${o.no} → ${st}`);
-    toast(`#${o.no} → ${STBN[st]}${st === 'Confirmed' ? ' (কুরিয়ার পেজে Entry)' : ''}`, () => { o.status = prev; o.cancelType = prevCT || ''; save('orders', o, false, `অর্ডার #${o.no} → ${prev} (Undo)`); });
+    toast(`#${o.no} → ${STBN[st]}${st === 'Confirmed' ? ' (কুরিয়ার পেজে Entry)' : st === 'Pending' ? ' (অর্ডার পেজে "কল বাকি"-তে আছে)' : ''}`, () => { o.status = prev; o.cancelType = prevCT || ''; Object.assign(o, prevCall); save('orders', o, false, `অর্ডার #${o.no} → ${prev} (Undo)`); });
   },
   /* ---------- confirmation call result ---------- */
   call(id, k) {
@@ -86,18 +89,17 @@ const A = {
     const o = id ? S.orders[id] : Object.assign({ date: today(), status: 'Pending', pay: 'Cash on Delivery', items: [] }, pre || {});
     const ed = can('orders_edit'), dis = ed ? '' : 'disabled', cs = ['', ...cfg().couriers];
     if (!id && !ed) return toast('অর্ডার যোগের অনুমতি নেই');
-    const body = (id && can('orders_status') ? `<div class="chips">${ST.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="if(A.status('${id}','${s}')!==false)closeSheet()">${STBN[s]}</button>`).join('')}</div>` : '') +
-      (id && can('orders_status') ? `<div class="lbl">📞 কনফার্মেশন কলের ফলাফল</div><div class="chips">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" onclick="closeSheet();A.call('${id}','${k}')">${CALLS[k][0]} ${CALLS[k][1]}</button>`).join('')}</div>${o.call ? `<div class="os">${callLine(o)}</div>` : ''}` : '') +
+    const stOn = !!(id && can('orders_status'));
+    const body = (stOn ? `<div class="chips sc cs">${ST.map(s => `<button class="chip ${o.status === s ? 'on' : ''}" onclick="if(A.status('${id}','${s}')!==false)closeSheet()">${STBN[s]}</button>`).join('')}</div>` : '') +
+      (stOn ? `<div class="lbl cl">📞 কলের ফলাফল</div><div class="chips sc cs">${Object.keys(CALLS).map(k => `<button class="chip ${o.call === k ? 'on' : ''}" onclick="closeSheet();A.call('${id}','${k}')">${CALLS[k][0]} ${CALLS[k][1]}</button>`).join('')}</div>${o.call ? `<div class="os">${callLine(o)}</div>` : ''}` : '') +
       (id && o.by ? `<div class="os">👤 অর্ডার যোগ করেছেন: <b>${esc(o.by)}</b>${o.byAt ? ' · ' + fmtDT(o.byAt) : ''}</div>` : '') +
       (id ? `<div class="btnrow" style="margin:4px 0 8px"><button class="btn ghost sm" onclick="A.forward('${id}')">${ico('up', 14)} টিম গ্রুপে পাঠান</button><button class="btn ghost sm" onclick="A.thread('${id}')">💬 এই অর্ডার নিয়ে আলোচনা${typeof chatCount === 'function' && chatCount(id) ? ' (' + chatCount(id) + ')' : ''}</button></div>` : '') +
-      fld('date', 'তারিখ', 'date', o.date, 0, dis) + fld('customer', 'কাস্টমার', 'text', o.customer, 0, dis) + fld('phone', 'ফোন', 'tel', o.phone, 0, dis) + `<div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn sm" onclick="A.dialIn('phone')">${ico('phone', 14)} কল করুন</button><button type="button" class="btn ghost sm" onclick="A.cpIn('phone','নম্বর')">${ico('copy', 14)} নম্বর কপি</button>${id ? `<button type="button" class="btn ghost sm" onclick="A.fraud('${id}')">${ico('shield', 14)} ফ্রড চেক</button>` : ''}</div>` + fld('address', 'ঠিকানা', 'textarea', o.address, 0, `${dis} oninput="A.autoArea()"`) +
-      `<div class="row2">${fld('source', 'সোর্স', 'select', normSource(o.source), srcOpts(o.source), dis)}${fld('area', 'জেলা (ঠিকানা থেকে অটো বসে)', 'text', o.area || areaOf(o.address).district, 0, `${dis} data-man="${o.area && o.area !== areaOf(o.address).district ? 1 : 0}" oninput="this.dataset.man=1"`)}</div>` +
-      picsFld(o, dis) +
-      `<div class="row2">${fld('note', 'নোট', 'text', o.note, 0, dis)}${fld('urgent', 'গুরুত্ব', 'select', o.urgent ? '1' : '', [['', 'সাধারণ'], ['1', '🔥 জরুরি']], dis)}</div>` + (ed ? linesEditor(o.items, 'sell', true) : `<div class="lbl">আইটেম</div><div class="os">${(o.items || []).map(i => esc(i.code) + '×' + i.qty).join(', ') || '—'}</div>`) +
-      `<div class="row2">${fld('delivery', 'ডেলিভারি চার্জ', 'number', o.delivery, 0, dis)}${fld('discount', 'ডিসকাউন্ট', 'number', o.discount, 0, dis)}</div>` +
-      fld('bill', 'বিল (আইটেম না দিলে এই টাকাই ধরা হবে)', 'number', o.bill, 0, dis) +
-      `<div class="row2">${fld('advance', 'অগ্রিম পেমেন্ট', 'number', o.advance, 0, dis)}${fld('pay', 'পেমেন্ট', 'select', o.pay, PAY_O, dis)}</div>` +
-      fld('status', 'স্ট্যাটাস', 'select', o.status, ST.map(s => [s, STBN[s]]), dis) +
+      `<div class="row2">${fld('date', 'তারিখ', 'date', o.date, 0, dis)}${fld('source', 'সোর্স', 'select', normSource(o.source), srcOpts(o.source), dis)}</div>` + fld('customer', 'কাস্টমার', 'text', o.customer, 0, dis) + fld('phone', 'ফোন', 'tel', o.phone, 0, dis) + `<div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn sm" onclick="A.dialIn('phone')">${ico('phone', 14)} কল করুন</button><button type="button" class="btn ghost sm" onclick="A.cpIn('phone','নম্বর')">${ico('copy', 14)} নম্বর কপি</button>${id ? `<button type="button" class="btn ghost sm" onclick="A.fraud('${id}')">${ico('shield', 14)} ফ্রড চেক</button>` : ''}</div>` + fld('address', 'ঠিকানা', 'textarea', o.address, 0, `${dis} oninput="A.autoArea()"`) +
+      `<div class="row2">${fld('area', 'জেলা (অটো)', 'text', o.area || areaOf(o.address).district, 0, `${dis} data-man="${o.area && o.area !== areaOf(o.address).district ? 1 : 0}" oninput="this.dataset.man=1"`)}${fld('urgent', 'গুরুত্ব', 'select', o.urgent ? '1' : '', [['', 'সাধারণ'], ['1', '🔥 জরুরি']], dis)}</div>` +
+      fld('note', 'নোট', 'text', o.note, 0, dis) + picsFld(o, dis) + (ed ? linesEditor(o.items, 'sell', true) : `<div class="lbl">আইটেম</div><div class="os">${(o.items || []).map(i => esc(i.code) + '×' + i.qty).join(', ') || '—'}</div>`) +
+      `<div class="row3">${fld('delivery', 'ডেলিভারি', 'number', o.delivery, 0, dis)}${fld('discount', 'ডিসকাউন্ট', 'number', o.discount, 0, dis)}${fld('advance', 'অগ্রিম', 'number', o.advance, 0, dis)}</div>` +
+      `<div class="row2">${fld('bill', 'বিল (আইটেম না থাকলে)', 'number', o.bill, 0, dis)}${fld('pay', 'পেমেন্ট', 'select', o.pay, PAY_O, dis)}</div>` +
+      (stOn ? '' : fld('status', 'স্ট্যাটাস', 'select', o.status, ST.map(s => [s, STBN[s]]), dis)) +
       (CANCEL_ST.includes(o.status) ? fld('cancelType', 'ক্যানসেল কীভাবে হলো', 'select', o.cancelType || '', [['', '—'], ['call', 'কনফার্মেশন কলে ক্যানসেল'], ['courier', 'কুরিয়ারে থাকা অবস্থায় ক্যানসেল']], dis) : '') +
       `<div class="row2">${fld('courier', 'কুরিয়ার', 'select', o.courier || '', cs, dis)}${fld('tracking', 'কনসাইনমেন্ট নং', 'text', o.tracking, 0, dis)}</div><div class="btnrow" style="margin:-4px 0 10px"><button type="button" class="btn ghost sm" onclick="A.cpIn('tracking','কনসাইনমেন্ট নং')">${ico('copy', 14)} কনসাইনমেন্ট নং কপি</button></div>` +
       (can('costs_view') ? fld('charge', '🔒 কুরিয়ার চার্জ (আমাকে যা নেয়)', 'number', o.charge, 0, dis) + '<div class="panel" id="codrow"></div>' + fld('retCharge', '🔒 রিটার্নে কাস্টমারের দেওয়া ডেলিভারি চার্জ (আমার আয়)', 'number', o.retCharge, 0, dis) : '') +

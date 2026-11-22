@@ -99,6 +99,7 @@ function orderCard({ o, r }) {
   if (!sm && can('orders_view')) {
     if (o.status === 'Pending') { if (stt) acts.push(btn('', `A.confirm('${o.id}')`, 'check', 'কনফার্ম')); }
     else if (stg === 'entry') {
+      if (stt && !o.cid) acts.push(btn('ghost', `A.backToCall('${o.id}')`, 'phone', 'কল বাকিতে ফেরত'));
       if (!itemsOk(o)) acts.push(btn('warnb', `A.order('${o.id}')`, 'plus', 'আইটেম দিন'));
       else if (stockShort(o).length) acts.push(btn('warnb', `A.order('${o.id}')`, 'alert', 'স্টক আউট'));
       else {
@@ -266,9 +267,9 @@ function vStaff() {
     (L.map(s => { const ps = Object.keys(s.perms || {}).filter(k => s.perms[k]); return `<div class="oc" onclick="A.staffForm('${s.id}')"><div class="oh"><b>${esc(s.name || '')}</b><span class="bd ${s.active === false ? 'b-red' : 'b-green'}">${s.active === false ? 'বন্ধ' : 'চালু'}</span></div><div class="os">${esc(s.email || '')}</div><div class="os">${ps.length ? ps.slice(0, 6).map(p => `<span class="tag">${esc((PM.GROUPS.flatMap(g => g.items).find(i => i[0] === p) || [p, p])[1].replace(/\(.*$/, '').slice(0, 22))}</span>`).join('') + (ps.length > 6 ? `<span class="tag">+${ps.length - 6}</span>` : '') : 'কোনো পারমিশন নেই'}</div></div>`; }).join('') || (cl ? emptyBox('users', 'এখনো কোনো স্টাফ নেই') : ''));
 }
 function vTrash() {
-  if (!can('delete')) return '';
-  const L = Object.values(S.orders).filter(o => o._d).sort((a, b) => (b._u || 0) - (a._u || 0)).slice(0, 80);
-  return head('ডিলিট করা অর্ডার') + `<p class="note">ভুলে ডিলিট হলে এখান থেকে ফিরিয়ে আনুন — স্টক, বিক্রি ও প্রফিট আবার আগের মতো হিসাবে আসবে।</p>` + (L.map(o => { const dl = (o.hist || []).filter(e => e.a === 'deleted').pop(); return `<div class="oc"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b><span class="muted">${esc(o.phone || '')}</span></div><div class="os">স্ট্যাটাস ছিল: <b>${esc(STBN[o.status] || o.status || '')}</b>${dl ? ` · ডিলিট করেছেন: ${esc(dl.by || '?')} · ${fmtDT(dl.t)}` : ''}</div><div class="btnrow"><button class="btn sm" onclick="A.ordRestore('${o.id}')">↩ ফিরিয়ে আনুন</button><button class="btn ghost sm" onclick="A.history('${o.id}')">🕘 ইতিহাস</button></div></div>`; }).join('') || emptyBox('box', 'ডিলিট করা কোনো অর্ডার নেই'));
+  if (!can('delete') && !isOwner()) return '';
+  const L = Object.values(S.orders).filter(o => o._d && (isOwner() || delByMe(o))).sort((a, b) => (b._u || 0) - (a._u || 0)).slice(0, 80);
+  return head('ডিলিট করা অর্ডার') + `<p class="note">ভুলে ডিলিট হলে এখান থেকে ফিরিয়ে আনুন — স্টক, বিক্রি ও প্রফিট আবার আগের মতো হিসাবে আসবে।${isOwner() ? '' : ' (আপনি যেগুলো ডিলিট করেছেন শুধু সেগুলো এখানে দেখাবে।)'}</p>` + (L.map(o => { const dl = (o.hist || []).filter(e => e.a === 'deleted').pop(); return `<div class="oc"><div class="oh"><b>#${o.no} ${esc(o.customer || '')}</b><span class="muted">${esc(o.phone || '')}</span></div><div class="os">স্ট্যাটাস ছিল: <b>${esc(STBN[o.status] || o.status || '')}</b>${dl ? ` · ডিলিট করেছেন: ${esc(dl.by || '?')} · ${fmtDT(dl.t)}` : ''}</div><div class="btnrow"><button class="btn sm" onclick="A.ordRestore('${o.id}')">↩ ফিরিয়ে আনুন</button><button class="btn ghost sm" onclick="A.history('${o.id}')">🕘 ইতিহাস</button></div></div>`; }).join('') || emptyBox('box', 'ডিলিট করা কোনো অর্ডার নেই'));
 }
 function vLogs() {
   if (!isOwner()) return '';

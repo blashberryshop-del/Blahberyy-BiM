@@ -1,4 +1,4 @@
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 /* BlashBerry — app core: state, storage, permissions, cloud sync, auth */
 const { ST, n, live, parseOrder, mapStatus, calc, agg, snap, ledger, normSource, matchSource, areaOf, mergeState, splitForSave, migrate, report, FIN_PAIR } = BB;
 const PM = BBPerms, COLLS = PM.COLLS;
@@ -69,10 +69,11 @@ function pruneLocal() { if (!profile) return; COLLS.forEach(c => { if (!canR(c) 
 /* ---------- per-order history ---------- */
 const HIST_F = { customer: 'নাম', phone: 'ফোন', address: 'ঠিকানা', note: 'নোট', pay: 'পেমেন্ট', charge: 'চার্জ', delivery: 'ডেলিভারি', source: 'সোর্স', cid: 'কনসাইনমেন্ট', cstatus: 'কুরিয়ার স্ট্যাটাস', call: 'কল' };
 function ordSnap(o) { const x = {}; Object.keys(HIST_F).forEach(k => { x[k] = o[k] == null ? '' : String(o[k]).slice(0, 80); }); x.items = JSON.stringify(o.items || o.lines || '').slice(0, 300); return x; }
+const delByMe = o => { const d = (o.hist || []).filter(e => e.a === 'deleted').pop(); return !!d && ((d.u && d.u === SY.uid) || (!d.u && d.by && d.by === (profile && profile.name))); };
 function trackOrder(rec, act) {
   if (!profile) return;
   const h = rec.hist || (rec.hist = []), by = profile.name || '', t = Date.now();
-  const add = e => { h.push(Object.assign({ t, by }, e)); if (h.length > 60) h.splice(0, h.length - 60); };
+  const add = e => { h.push(Object.assign({ t, by, u: (typeof SY !== 'undefined' && SY.uid) || '' }, e)); if (h.length > 60) h.splice(0, h.length - 60); };
   if (act) add({ a: act, f: rec.status || '' });
   else if (rec._ls === undefined) { if (!h.length) add({ a: 'created', to: rec.status || '' }); }
   else {
@@ -228,7 +229,7 @@ function closeSheet() { const d = $('#sheet'); if (d) d.remove(); }
 function fld(k, label, type = 'text', val = '', opts, attrs = '') {
   let inp;
   if (type === 'select') inp = `<select data-k="${k}" ${attrs}>${opts.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(v) === String(val) ? 'selected' : ''}>${esc(l)}</option>`; }).join('')}</select>`;
-  else if (type === 'textarea') inp = `<textarea data-k="${k}" rows="3" ${attrs}>${esc(val)}</textarea>`;
+  else if (type === 'textarea') inp = `<textarea data-k="${k}" rows="2" ${attrs}>${esc(val)}</textarea>`;
   else inp = `<input data-k="${k}" type="${type}" ${type === 'number' ? 'inputmode="decimal" step="any"' : ''} value="${esc(val)}" ${attrs}>`;
   return `<label class="f"><span>${label}</span>${inp}</label>`;
 }
