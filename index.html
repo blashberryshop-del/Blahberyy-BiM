@@ -221,11 +221,77 @@ textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;min-h
 .ft{width:100%;border-collapse:collapse;margin:4px 0 8px;font-size:13.5px}.ft th{font-size:12px;color:var(--mut);font-weight:600;text-align:center;padding:6px 4px;border-bottom:1px solid var(--line)}.ft th:first-child,.ft td:first-child{text-align:left}.ft td{text-align:center;padding:8px 4px;border-bottom:1px solid var(--line)}
 .tb.unread{background:var(--errb);color:var(--err);animation:ring 1.6s ease-in-out 2}
 @keyframes ring{0%,100%{transform:rotate(0)}15%{transform:rotate(-12deg)}30%{transform:rotate(10deg)}45%{transform:rotate(-6deg)}60%{transform:rotate(4deg)}}
+
+/* ===== ডিজাইন থিম (সেটিংস → ডিজাইন) — data-ui = classic | soft | glass ===== */
+/* ---- SOFT (নিউমরফিক): হালকা ধূসর, উঁচু কার্ড, বসানো ইনপুট, নীল-সায়ান বাটন ---- */
+:root[data-ui=soft]{--b:#1b78f2;--b2:#19c4f0;--side:#e6ebf2;--sidehi:#dde3ec;--bg:#e6ebf2;--bgimg:radial-gradient(circle at 6% 9%,#f2f5fa 0 70px,transparent 71px),radial-gradient(circle at 96% 82%,#f2f5fa 0 120px,transparent 121px),radial-gradient(circle at 80% 4%,#eef2f8 0 34px,transparent 35px);--card:#e6ebf2;--txt:#2b3648;--mut:#7a8699;--line:rgba(160,172,190,.35);--soft:#dde3ec;--soft2:#e0e6ee;--sh:7px 7px 16px #c4cad4,-7px -7px 16px #fbfdff;--nsh:7px 7px 16px #c4cad4,-7px -7px 16px #fbfdff;--nin:inset 4px 4px 9px #c4cad4,inset -4px -4px 9px #fbfdff;--r:20px}
+:root[data-ui=soft][data-theme=dark]{--b:#4aa3ff;--b2:#22d3ee;--side:#262b34;--sidehi:#2c323c;--bg:#262b34;--bgimg:radial-gradient(circle at 6% 9%,#2a303a 0 70px,transparent 71px),radial-gradient(circle at 96% 82%,#2a303a 0 120px,transparent 121px);--card:#262b34;--txt:#e6ebf4;--mut:#9aa6b8;--line:rgba(120,134,156,.25);--soft:#2c323c;--soft2:#2a303a;--sh:7px 7px 16px #1c2027,-7px -7px 16px #30363f;--nsh:7px 7px 16px #1c2027,-7px -7px 16px #30363f;--nin:inset 4px 4px 9px #1c2027,inset -4px -4px 9px #30363f}
+@media (prefers-color-scheme:dark){:root[data-ui=soft]:not([data-theme=light]){--b:#4aa3ff;--b2:#22d3ee;--side:#262b34;--sidehi:#2c323c;--bg:#262b34;--bgimg:radial-gradient(circle at 6% 9%,#2a303a 0 70px,transparent 71px),radial-gradient(circle at 96% 82%,#2a303a 0 120px,transparent 121px);--card:#262b34;--txt:#e6ebf4;--mut:#9aa6b8;--line:rgba(120,134,156,.25);--soft:#2c323c;--soft2:#2a303a;--sh:7px 7px 16px #1c2027,-7px -7px 16px #30363f;--nsh:7px 7px 16px #1c2027,-7px -7px 16px #30363f;--nin:inset 4px 4px 9px #1c2027,inset -4px -4px 9px #30363f}}
+[data-ui=soft] #top{background:var(--bg);border-bottom:0}
+[data-ui=soft] #top .logo{background:var(--bg);color:var(--b);box-shadow:var(--nsh)}
+[data-ui=soft] .tb,[data-ui=soft] #sync{background:var(--bg);box-shadow:var(--nsh)}
+[data-ui=soft] .oc,[data-ui=soft] .panel,[data-ui=soft] .kc,[data-ui=soft] .gi{background:var(--bg);border:0;box-shadow:var(--nsh)}
+[data-ui=soft] .hero{background:linear-gradient(135deg,var(--b),var(--b2));box-shadow:0 14px 30px rgba(27,120,242,.35),var(--nsh)}
+[data-ui=soft] .btn{background:linear-gradient(90deg,var(--b),var(--b2));box-shadow:0 8px 18px rgba(27,120,242,.32);border-radius:16px;transition:.2s}
+[data-ui=soft] .btn:hover{box-shadow:0 10px 26px rgba(25,196,240,.55);transform:translateY(-1px)}
+[data-ui=soft] .btn.ghost,[data-ui=soft] .btn.red{background:var(--bg);color:var(--b);box-shadow:var(--nsh)}[data-ui=soft] .btn.red{color:var(--err)}
+[data-ui=soft] .btn:active{transform:scale(.97)}
+[data-ui=soft] .f input,[data-ui=soft] .f select,[data-ui=soft] .f textarea,[data-ui=soft] .search,[data-ui=soft] .ln input,[data-ui=soft] .plr input,[data-ui=soft] #chatin,[data-ui=soft] .sinp{background:var(--bg);border:0;box-shadow:var(--nin);border-radius:14px}
+[data-ui=soft] .f input:focus,[data-ui=soft] .f select:focus,[data-ui=soft] .f textarea:focus,[data-ui=soft] .search:focus{outline:0;box-shadow:var(--nin),0 2px 0 0 var(--b2)}
+[data-ui=soft] .chip{background:var(--bg);border:0;box-shadow:var(--nsh)}
+[data-ui=soft] .chip.on{background:linear-gradient(90deg,var(--b),var(--b2));color:#fff;box-shadow:0 6px 14px rgba(27,120,242,.3)}
+[data-ui=soft] .seg{background:var(--bg);box-shadow:var(--nin)}[data-ui=soft] .seg button.on{background:var(--bg);box-shadow:var(--nsh);color:var(--b)}
+[data-ui=soft] .sh{background:var(--bg)}
+[data-ui=soft] #nav{background:var(--bg);border-radius:24px 24px 0 0;box-shadow:0 -6px 16px rgba(160,172,190,.35)}
+[data-ui=soft] #nav button{color:var(--mut)}[data-ui=soft] #nav button.on{color:var(--b)}
+[data-ui=soft] #nav button.on .pill{background:var(--bg);box-shadow:var(--nin)}
+[data-ui=soft] #fab{background:linear-gradient(135deg,var(--b),var(--b2));box-shadow:0 10px 22px rgba(27,120,242,.4)}
+[data-ui=soft] .login .lgo{background:var(--bg);color:var(--b);box-shadow:var(--nsh)}
+[data-ui=soft] .login{background:var(--bg);border-radius:30px;padding:30px 22px;box-shadow:var(--nsh)}
+[data-ui=soft] #toast{background:#2b3648}
+@media(min-width:900px){[data-ui=soft] #nav{border-radius:26px;box-shadow:var(--nsh)}[data-ui=soft] #nav:before{color:var(--b)}[data-ui=soft] #nav:after{color:var(--mut)}[data-ui=soft] #nav button:hover:not(.on){background:var(--soft2)}[data-ui=soft] #nav button.on{background:var(--bg);box-shadow:var(--nin)}}
+
+/* ---- GLASS: গাঢ় বেগুনি-নীল, কাঁচের মতো কার্ড, ভাঁজ হওয়া সাইডবার ---- */
+:root[data-ui=glass],:root[data-ui=glass][data-theme=light],:root[data-ui=glass][data-theme=dark]{--b:#b79bff;--b2:#5b8cff;--side:rgba(255,255,255,.08);--sidehi:rgba(255,255,255,.16);--bg:#0c0722;--bgimg:radial-gradient(ellipse at 15% 8%,rgba(125,70,255,.55),transparent 48%),radial-gradient(ellipse at 88% 78%,rgba(40,110,255,.55),transparent 50%),linear-gradient(160deg,#0a0620,#150a3a 55%,#071a40);--card:rgba(255,255,255,.08);--txt:#f2efff;--mut:#b9b2dc;--line:rgba(255,255,255,.14);--soft:rgba(255,255,255,.12);--soft2:rgba(255,255,255,.08);--sh:0 8px 30px rgba(8,4,40,.45);--r:20px;--ok:#6fe39a;--okb:rgba(60,200,120,.18);--warn:#ffb57a;--warnb:rgba(255,150,70,.18);--err:#ff9a94;--errb:rgba(255,90,90,.18);--info:#8fc2ff;--infob:rgba(70,140,255,.2);--gray:#c5cdd6;--grayb:rgba(255,255,255,.1);--amb:rgba(255,200,80,.18);--amt:#ffd98a;--am:#ffc04d;color-scheme:dark}
+[data-ui=glass] #top{background:rgba(255,255,255,.06);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+[data-ui=glass] .tb,[data-ui=glass] #sync{background:rgba(255,255,255,.1)}
+[data-ui=glass] .oc,[data-ui=glass] .panel,[data-ui=glass] .kc,[data-ui=glass] .gi,[data-ui=glass] .login{background:rgba(255,255,255,.09);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.16);box-shadow:var(--sh)}
+[data-ui=glass] .hero{background:linear-gradient(135deg,rgba(124,77,255,.75),rgba(45,140,255,.7));border:1px solid rgba(255,255,255,.25);box-shadow:0 14px 34px rgba(60,40,200,.4)}
+[data-ui=glass] .btn{background:linear-gradient(135deg,#7c4dff,#2d8cff);color:#fff;box-shadow:0 8px 20px rgba(80,70,230,.4)}
+[data-ui=glass] .btn.ghost{background:rgba(255,255,255,.1);color:var(--txt);box-shadow:none;border:1px solid var(--line)}
+[data-ui=glass] .btn.red{background:rgba(255,90,90,.18);color:var(--err);box-shadow:none}
+[data-ui=glass] .f input,[data-ui=glass] .f select,[data-ui=glass] .f textarea,[data-ui=glass] .search,[data-ui=glass] .ln input,[data-ui=glass] .plr input{background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--txt)}
+[data-ui=glass] .f select option{color:#111}
+[data-ui=glass] .f input:focus,[data-ui=glass] .f select:focus,[data-ui=glass] .f textarea:focus,[data-ui=glass] .search:focus{outline:0;border-color:var(--b)}
+[data-ui=glass] .chip{background:rgba(255,255,255,.09);border-color:var(--line);color:var(--txt)}
+[data-ui=glass] .chip.on{background:linear-gradient(135deg,#7c4dff,#2d8cff);border-color:transparent;color:#fff}
+[data-ui=glass] .seg{background:rgba(255,255,255,.08)}[data-ui=glass] .seg button.on{background:rgba(255,255,255,.18);color:#fff}
+[data-ui=glass] .sh{background:rgba(24,14,62,.94);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);border:1px solid var(--line)}
+[data-ui=glass] .li{border-color:var(--line)}
+[data-ui=glass] #nav{background:rgba(255,255,255,.1);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(8,4,40,.4)}
+[data-ui=glass] #nav button{color:rgba(255,255,255,.7)}[data-ui=glass] #nav button.on{color:#fff}
+[data-ui=glass] #nav button.on .pill{background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+[data-ui=glass] #fab{background:linear-gradient(135deg,#7c4dff,#2d8cff);box-shadow:0 10px 24px rgba(80,70,230,.5)}
+[data-ui=glass] .login .lgo{background:linear-gradient(135deg,#7c4dff,#2d8cff)}
+[data-ui=glass] #toast{background:rgba(20,12,56,.95);border:1px solid var(--line)}
+[data-ui=glass] .hero small,[data-ui=glass] .hero h1{color:#fff}
+html[data-ui=soft],html[data-ui=soft] body,html[data-ui=glass],html[data-ui=glass] body{background:var(--bgimg),var(--bg);background-attachment:fixed}
+#railbtn{display:none}
+@media(min-width:900px){
+  [data-ui=glass] #nav{border:1px solid rgba(255,255,255,.18);border-radius:26px;box-shadow:0 18px 40px rgba(8,4,40,.5)}
+  [data-ui=glass] #nav button.on{background:rgba(255,255,255,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+  [data-ui=glass] #nav button:hover:not(.on){background:rgba(255,255,255,.1)}
+  [data-ui=glass] #railbtn{display:grid}
+  html[data-ui=glass][data-rail="1"] #app{grid-template-columns:84px 1fr}
+  html[data-ui=glass][data-rail="1"] #nav{padding:22px 10px;align-items:center}
+  html[data-ui=glass][data-rail="1"] #nav:before{content:"BM";padding:4px 0 16px}html[data-ui=glass][data-rail="1"] #nav:after{content:""}
+  html[data-ui=glass][data-rail="1"] #nav button{font-size:0;gap:0;padding:10px;justify-content:center}
+}
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="top"><div class="logo">BM</div><div class="tt" id="shopname">BiM Manager</div><div id="sync"><i style="background:#9e9e9e"></i>লোকাল</div><button class="tb" id="chatbtn" aria-label="টিম চ্যাট" style="display:none;position:relative" onclick="A.nav('chat')"></button><button class="tb" id="gearbtn" aria-label="সেটিংস" onclick="A.settings()"></button></div>
+  <div id="top"><div class="logo">BM</div><div class="tt" id="shopname">BiM Manager</div><div id="sync"><i style="background:#9e9e9e"></i>লোকাল</div><button class="tb" id="railbtn" onclick="A.rail()" aria-label="সাইডবার ছোট/বড়">☰</button><button class="tb" id="chatbtn" aria-label="টিম চ্যাট" style="display:none;position:relative" onclick="A.nav('chat')"></button><button class="tb" id="gearbtn" aria-label="সেটিংস" onclick="A.settings()"></button></div>
   <div id="main"></div>
   <button id="fab" aria-label="নতুন যোগ করুন" onclick="A.fab()"></button>
   <div id="chatdock" class="hide"></div>
