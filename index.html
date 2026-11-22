@@ -290,6 +290,35 @@ html[data-ui=soft],html[data-ui=soft] body,html[data-ui=glass],html[data-ui=glas
   html[data-ui=glass][data-rail="1"] #nav:before{content:"BM";padding:4px 0 16px}html[data-ui=glass][data-rail="1"] #nav:after{content:""}
   html[data-ui=glass][data-rail="1"] #nav button{font-size:0;gap:0;padding:10px;justify-content:center}
 }
+
+/* ===== অ্যানিমেশন (সেটিংস → অ্যানিমেশন: বন্ধ / হালকা / পূর্ণ) — data-fx ===== */
+html:not([data-fx=off]) .btn,html:not([data-fx=off]) .chip,html:not([data-fx=off]) .tb{transition:transform .15s,box-shadow .2s,background .25s,color .25s}
+html:not([data-fx=off]) .btn:active,html:not([data-fx=off]) .chip:active{transform:scale(.96)}
+html:not([data-fx=off]) #nav button,html:not([data-fx=off]) #nav .pill{transition:background .28s,color .28s,box-shadow .28s}
+html:not([data-fx=off]):is([data-ui=soft],[data-ui=glass]) .shb .f,html:not([data-fx=off]):is([data-ui=soft],[data-ui=glass]) .login .f{position:relative}
+html:not([data-fx=off]):is([data-ui=soft],[data-ui=glass]) .shb .f::after,html:not([data-fx=off]):is([data-ui=soft],[data-ui=glass]) .login .f::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--b),var(--b2,var(--b)));transform:scaleX(0);transform-origin:left;transition:transform .35s ease;pointer-events:none}
+html:not([data-fx=off]):is([data-ui=soft],[data-ui=glass]) .shb .f:focus-within::after,html:not([data-fx=off]):is([data-ui=soft],[data-ui=glass]) .login .f:focus-within::after{transform:scaleX(1)}
+@keyframes lgin{from{opacity:0;transform:perspective(900px) rotateY(-70deg)}to{opacity:1;transform:perspective(900px) rotateY(0)}}
+@keyframes lgout{to{opacity:0;transform:perspective(900px) rotateY(70deg)}}
+html:not([data-fx=off]) .login.lg-in{animation:lgin .28s ease-out}
+html:not([data-fx=off]) .login.lg-out{animation:lgout .22s ease-in forwards}
+@media(min-width:900px){html:not([data-fx=off]) #app{transition:grid-template-columns .3s ease}}
+/* পূর্ণ: একটু বেশি — কার্ড ভাসা, বাটনে আলো, ব্যাজ স্পন্দন */
+html[data-fx=full] .oc,html[data-fx=full] .panel,html[data-fx=full] .kc{transition:transform .2s,box-shadow .25s}
+html[data-fx=full] .oc:hover,html[data-fx=full] .kc:hover{transform:translateY(-2px)}
+html[data-fx=full] .btn:not(.ghost):hover{filter:brightness(1.08);box-shadow:0 8px 22px rgba(60,140,255,.38)}
+@keyframes pulseDot{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+html[data-fx=full] #nav .bdg,html[data-fx=full] #nav .badge,html[data-fx=full] #chatbtn .dot{animation:pulseDot 1.8s ease-in-out infinite}
+html[data-fx=off] *{animation:none!important;transition:none!important}
+
+/* থিম অনুযায়ী আলাদা ইফেক্ট */
+html[data-ui=soft]:not([data-fx=off]) .btn.ghost:active,html[data-ui=soft]:not([data-fx=off]) .chip:active,html[data-ui=soft]:not([data-fx=off]) .tb:active{box-shadow:var(--nin)}
+html[data-ui=soft][data-fx=full] .btn:not(.ghost):hover{box-shadow:0 10px 28px rgba(25,196,240,.6)}
+html[data-ui=glass]:not([data-fx=off]) .btn:not(.ghost):hover{filter:brightness(1.1)}
+@keyframes shineMove{from{transform:translateX(-120%)}to{transform:translateX(120%)}}
+html[data-ui=glass]:not([data-fx=off]) #nav button{position:relative;overflow:hidden}
+html[data-ui=glass]:not([data-fx=off]) #nav button.shine:after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);animation:shineMove .7s ease-out 1;pointer-events:none}
+@media(min-width:900px){html[data-ui]:not([data-fx=off]) #nav button.on{position:relative;z-index:2}}
 </style>
 </head>
 <body>

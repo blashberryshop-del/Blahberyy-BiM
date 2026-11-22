@@ -277,7 +277,8 @@ function vLogs() {
 }
 function vLogin() {
   const c = cloudCfg() || {};
-  return `<div class="login"><div class="lgo">BB</div><h2>BlashBerry লগইন</h2><p class="muted">${SY.err ? `<span class="rd">${esc(SY.err)}</span>` : 'আপনার ইমেইল ও পাসওয়ার্ড দিয়ে ঢুকুন'}</p>${c.config ? '' : fld('code', 'সেটআপ কোড (Owner দিয়েছেন)', 'textarea', '')}${fld('email', 'ইমেইল', 'email', c.email || '')}${fld('pass', 'পাসওয়ার্ড', 'password', '')}<button class="btn" onclick="A.login()">লগইন</button><button class="btn ghost" onclick="A.login(true)">নতুন Owner অ্যাকাউন্ট খুলুন</button>` +
+  if (SY.lgReset) return `<div class="login lg-in"><div class="lgo">🔑</div><h2>পাসওয়ার্ড রিসেট</h2><p class="muted">${SY.rmsg ? esc(SY.rmsg) : 'আপনার ইমেইল দিন — রিসেট লিংক সেই ইমেইলে যাবে।'}</p>${c.config ? '' : fld('code', 'সেটআপ কোড (Owner দিয়েছেন)', 'textarea', '')}${fld('email', 'ইমেইল', 'email', c.email || '')}<button class="btn" onclick="A.lgSend()">রিসেট লিংক পাঠান</button><button class="btn ghost" onclick="A.lgFlip()">← লগইনে ফিরুন</button></div>`;
+  return `<div class="login lg-in"><div class="lgo">BB</div><h2>BlashBerry লগইন</h2><p class="muted">${SY.err ? `<span class="rd">${esc(SY.err)}</span>` : 'আপনার ইমেইল ও পাসওয়ার্ড দিয়ে ঢুকুন'}</p>${c.config ? '' : fld('code', 'সেটআপ কোড (Owner দিয়েছেন)', 'textarea', '')}${fld('email', 'ইমেইল', 'email', c.email || '')}${fld('pass', 'পাসওয়ার্ড', 'password', '')}<button class="btn" onclick="A.login()">লগইন</button><button class="btn ghost sm" onclick="A.lgFlip()">পাসওয়ার্ড ভুলে গেছেন?</button><button class="btn ghost" onclick="A.login(true)">নতুন Owner অ্যাকাউন্ট খুলুন</button>` +
     `<p class="note">স্টাফ হলে শুধু "লগইন" চাপুন (অ্যাকাউন্ট Owner খুলে দেবেন)। "নতুন Owner অ্যাকাউন্ট" শুধু দোকানের মালিক প্রথমবার সেটআপের সময় চাপবেন।</p><button class="btn ghost sm" onclick="A.cloudOff()">ক্লাউড বন্ধ করে লোকাল মোডে যান</button></div>`;
 }
 
@@ -312,7 +313,13 @@ function render() {
   el.innerHTML = VIEWS[v]();
   const tabs = [['home', 'home', 'হোম', 1], ['orders', 'box', 'অর্ডার', can('orders_view')], ['courier', 'truck', 'কুরিয়ার', can('orders_view')], ['sales', 'bag', 'বিক্রি', can('sales_view')], ['more', 'grid', 'আরও', 1]].filter(x => x[3]);
   const act = tabs.some(t => t[0] === v) ? v : 'more';
-  nav.classList.remove('hide'); nav.innerHTML = tabs.map(([k, i, l]) => `<button class="${k === act ? 'on' : ''}" onclick="A.nav('${k}')"><span class="pill">${ico(i, 21)}</span>${l}</button>`).join('');
+  const oldOn = nav.querySelector('button.on'), oldTop = oldOn ? oldOn.getBoundingClientRect().top : null, oldKey = oldOn ? oldOn.dataset.k : null;
+  nav.classList.remove('hide'); nav.innerHTML = tabs.map(([k, i, l]) => `<button class="${k === act ? 'on' : ''}" data-k="${k}" onclick="A.nav('${k}')"><span class="pill">${ico(i, 21)}</span>${l}</button>`).join('');
+  try { const nw = nav.querySelector('button.on'), ui = document.documentElement.dataset.ui, fx = document.documentElement.dataset.fx;
+    if (nw && oldKey && oldKey !== nw.dataset.k && ui && fx !== 'off') {
+      if (ui === 'glass') { nw.classList.add('shine'); setTimeout(() => nw.classList.remove('shine'), 800); }
+      if (innerWidth >= 900 && oldTop != null) { const dy = oldTop - nw.getBoundingClientRect().top; if (Math.abs(dy) > 2 && Math.abs(dy) < 500) { nw.style.transition = 'none'; nw.style.transform = `translateY(${dy}px)`; void nw.offsetHeight; nw.style.transition = 'transform .35s cubic-bezier(.3,1.15,.4,1)'; nw.style.transform = ''; setTimeout(() => { nw.style.transition = ''; }, 400); } }
+    } } catch (e) { }
   const canAdd = ['orders_edit', 'sales_edit', 'purchases_edit', 'expenses_edit', 'damages_edit', 'cash_edit'].some(can) || can('orders_view');
   fab.classList.toggle('hide', !canAdd || v === 'chat'); fab.innerHTML = ico('plus', 28);
   el.scrollTop = lastView === v ? st : 0; const was = lastView; lastView = v; setSync(SY.st);

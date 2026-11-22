@@ -1,4 +1,4 @@
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.3.1';
 /* BlashBerry — app core: state, storage, permissions, cloud sync, auth */
 const { ST, n, live, parseOrder, mapStatus, calc, agg, snap, ledger, normSource, matchSource, areaOf, mergeState, splitForSave, migrate, report, FIN_PAIR } = BB;
 const PM = BBPerms, COLLS = PM.COLLS;
@@ -295,5 +295,5 @@ const seg = (k, val, opts, fn) => `<div class="seg">${opts.map(([v, l]) => `<but
 /* ---------- theme ---------- */
 function applyTheme() { const t = localStorage.bb_theme || 'auto'; if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = t; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = (t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme:dark)').matches)) ? '#4a1a35' : '#8E2C5A'; }
 applyTheme();
-function applyUI() { const u = localStorage.bb_ui || 'classic', h = document.documentElement; if (u === 'classic') h.removeAttribute('data-ui'); else h.dataset.ui = u; if (localStorage.bb_rail === '1') h.dataset.rail = '1'; else h.removeAttribute('data-rail'); }
+function applyUI() { { const fx = localStorage.bb_fx || 'low'; const rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; document.documentElement.dataset.fx = rm ? 'off' : fx; } const u = localStorage.bb_ui || 'classic', h = document.documentElement; if (u === 'classic') h.removeAttribute('data-ui'); else h.dataset.ui = u; if (localStorage.bb_rail === '1') h.dataset.rail = '1'; else h.removeAttribute('data-rail'); }
 applyUI();
