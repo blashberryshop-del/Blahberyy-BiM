@@ -1,8 +1,8 @@
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.4.0';
 /* BlashBerry — app core: state, storage, permissions, cloud sync, auth */
 const { ST, n, live, parseOrder, mapStatus, calc, agg, snap, ledger, normSource, matchSource, areaOf, mergeState, splitForSave, migrate, report, FIN_PAIR } = BB;
 const PM = BBPerms, COLLS = PM.COLLS;
-let S = {}; COLLS.forEach(c => S[c] = {}); S._v = 2;
+let S = {}; COLLS.forEach(c => S[c] = {}); S._v = 2; S.tasks = {};
 let D = null, R = null; const view = {};
 const SY = { st: 'off', db: null, shop: '', uid: '', unsub: [], staff: {}, logs: [] };
 
@@ -155,6 +155,7 @@ function fsDb() {
 function subscribeAll() {
   SY.unsub.forEach(f => f()); SY.unsub = []; const db = SY.db, base = `shops/${SY.shop}`;
   COLLS.filter(canR).forEach(coll => SY.unsub.push(db.collection(`${base}/${coll}`).onSnapshot(s => mergeRemote(coll, s), e => setSync('err', coll + ': ' + e.message))));
+  if (canR('tasks')) { const tq = isOwner() ? db.collection(`${base}/tasks`) : db.collection(`${base}/tasks`).where('to', 'array-contains', SY.uid); SY.unsub.push(tq.onSnapshot(s => { const seen = {}; s.forEach(d => { const r = d.data(); seen[r.id] = 1; S.tasks[r.id] = r; }); Object.keys(S.tasks).forEach(k => { if (!seen[k] && !(s.metadata && s.metadata.fromCache && s.size === 0)) delete S.tasks[k]; }); if (typeof tasksRefresh === 'function') tasksRefresh(); }, e => setSync('err', 'tasks: ' + e.message))); }
   SY.unsub.push(db.doc(`${base}/staff/${SY.uid}`).onSnapshot(d => {
     if (!d.exists) return; const x = d.data();
     if (x.role !== 'owner' && !x.active) { setProfile(null); SY.unsub.forEach(f => f()); SY.unsub = []; render(); return; }

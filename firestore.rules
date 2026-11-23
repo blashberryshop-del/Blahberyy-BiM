@@ -185,6 +185,15 @@ service cloud.firestore {
         allow delete: if isOwner(shop) || (can(shop, 'orders_view'));
       }
 
+      match /tasks/{id} {
+        // the owner sees everything; a tagged teammate sees only tasks that name them
+        allow read: if isOwner(shop) || ((can(shop, 'orders_view')) && request.auth.uid in resource.data.get('to', []));
+        allow create, delete: if isOwner(shop);
+        // a tagged teammate may only mark it done (or undo)
+        allow update: if isOwner(shop) || ((can(shop, 'orders_view')) && request.auth.uid in resource.data.get('to', [])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneAt', 'doneBy', 'doneName', '_u']));
+      }
+
       match /settings/{id} {
         allow read: if isStaff(shop);
         allow create, update: if isOwner(shop);

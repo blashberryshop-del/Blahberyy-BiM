@@ -46,6 +46,7 @@ function vHome() {
   const y = today().slice(0, 4), months = full && (ov || sv) ? [...Array(12)].map((_, i) => agg(R, d => (d || '').startsWith(y + '-' + String(i + 1).padStart(2, '0')))) : null;
   const hero = `<div class="hero"><small>${greet()} · ${fmtD(today())}</small><h1>${esc(cfg().shop)}</h1><div class="hst">${ov ? `<div><span>আজকের অর্ডার</span><b>${at.orders}</b></div>` : ''}${ov || sv ? `<div><span>আজকের বিক্রি</span><b>${money(at.sales)}</b></div>` : ''}${ov ? `<div><span>কুরিয়ারে</span><b>${a.withCourier}</b></div>` : ''}</div></div>`;
   let h = (typeof webBanner === 'function' ? webBanner() : '') + (ov ? `<input class="search" id="hq" style="margin-bottom:10px" placeholder="🔎 যেকোনো অর্ডার খুঁজুন — নাম / ফোন / নং / কনসাইনমেন্ট (সব স্ট্যাটাস)" value="${esc(view.hq || '')}" oninput="view.hq=this.value;A.hsearch()"><div id="hres">${hsearchHtml()}</div>` : '') + hero + (full ? `<div class="chips sc" style="margin-top:14px">${RANGES.map(([k, l]) => `<button class="chip ${r === k ? 'on' : ''}" onclick="A.range('${k}')">${l}</button>`).join('')}</div>` : '<div class="note" style="margin:12px 0 4px">📅 হোমে শুধু আজকের হিসাব দেখানো হচ্ছে</div>');
+  h += typeof vTasks === 'function' ? vTasks() : '';
   if (ov) {
     const okP = P.filter(x => x.status === 'OK').length, lowP = P.filter(x => x.status === 'Low Stock').length, outP = P.length - okP - lowP;
     const recent = [...R.onl].sort((x, y) => n(y.o.no) - n(x.o.no)).slice(0, 5);

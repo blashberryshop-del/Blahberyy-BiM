@@ -319,6 +319,7 @@ html[data-ui=glass]:not([data-fx=off]) .btn:not(.ghost):hover{filter:brightness(
 html[data-ui=glass]:not([data-fx=off]) #nav button{position:relative;overflow:hidden}
 html[data-ui=glass]:not([data-fx=off]) #nav button.shine:after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);animation:shineMove .7s ease-out 1;pointer-events:none}
 @media(min-width:900px){html[data-ui]:not([data-fx=off]) #nav button.on{position:relative;z-index:2}}
+.tk{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line,#0001)}.tk.late b{color:var(--err)}.tkc{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid var(--b);background:transparent;color:transparent;display:grid;place-items:center;padding:0;cursor:pointer}.tkc:hover,.tkc:active{background:var(--b);color:#fff}.tkb{flex:1;min-width:0;cursor:pointer}.tkn{font-size:13px;opacity:.8;white-space:pre-wrap}.tkb small{display:block;opacity:.7}.tki{max-width:100%;max-height:150px;border-radius:10px;margin-top:6px;display:block}.tko{display:inline-block;margin-top:4px;font-size:12px;background:var(--bg2,#0001);padding:2px 8px;border-radius:20px}.tkE{opacity:.65;padding:10px 0;font-size:14px}.tkcnt{background:var(--b);color:#fff;border-radius:20px;padding:0 7px;font-size:12px}.tkchk{display:flex;gap:8px;align-items:center;padding:4px 0}.tk.done{opacity:.85}.tk.done .tkb b{text-decoration:line-through}
 </style>
 </head>
 <body>
@@ -343,6 +344,7 @@ html[data-ui=glass]:not([data-fx=off]) #nav button.shine:after{content:"";positi
 <script src="push.js"></script>
 <script src="team.js"></script>
 <script src="web.js"></script>
+<script src="tasks.js"></script>
 <script src="views.js"></script>
 <script src="boot.js"></script>
 </body>
