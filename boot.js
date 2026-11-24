@@ -2,6 +2,7 @@
 (async function () {
   const saved = await idb.get('state');
   if (saved) { COLLS.forEach(c => S[c] = saved[c] || {}); S._v = saved._v || 1; S.tasks = saved.tasks || {}; }
+  if (!cloudCfg() && !profile && localStorage.bb_local !== '1' && Object.keys(S.orders || {}).length + Object.keys(S.products || {}).length + Object.keys(S.sales || {}).length) { try { localStorage.bb_local = '1'; } catch (e) { } profile = { role: 'owner', name: 'Owner', local: true }; }   // people already using local mode on this phone are not locked out
   if (migrate(S)) persist();                       // old single-record data -> sensitive parts split out
   const m = /^#setup=(.+)$/.exec(location.hash);   // staff setup link from the owner
   if (m) { try { const p = parseSetup(decodeURIComponent(m[1])); localStorage.bb_fb = JSON.stringify({ config: p.config, shop: p.shop || 'blashberry', email: '', pass: '' }); localStorage.removeItem('bb_profile'); profile = null; } catch (e) { } history.replaceState(null, '', location.pathname + '#home'); }

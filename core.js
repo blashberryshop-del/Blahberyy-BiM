@@ -69,6 +69,22 @@
   const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const DIST_RE = Object.entries(DIST).flatMap(([name, al]) => al.map(a => ({ name, a, re: /[a-z]/i.test(a) ? new RegExp('(?:^|[^a-z])' + escRe(a) + '(?![a-z])', 'i') : null }))).sort((x, y) => y.a.length - x.a.length);
   const titleCase = s => /[a-z]/i.test(s) ? s.replace(/\b[a-z]/g, c => c.toUpperCase()) : s;
+  // police station (থানা / উপজেলা) read from the address text: "থানা: কেরানীগঞ্জ", "কেরানীগঞ্জ থানা", "Thana: Savar", "Savar PS"; else a known Dhaka area name; else unknown
+  function thanaOf(addr) {
+    const a = String(addr || '').replace(/[\n\r]+/g, ', ').replace(/\s+/g, ' ').trim(); if (!a) return '';
+    const KW = '(?:থানা|থানা|থানায়|উপজেলা|উপজেলা|thana|tana|upazila|upazilla|upozila|p\\.?\\s?s\\.?|police\\s*station)';
+    const W = "([^\\s,।;:|()\\-–]+(?:\\s+[^\\s,।;:|()\\-–]+)?)";
+    const clean = s => (s || '').replace(/^(?:নাম|name)\b\s*[:：\-–]?\s*/i, '').replace(/[\s,.:;\-–]+$/g, '').trim();
+    let m = new RegExp(KW + '\\s*(?:নাম|name)?\\s*[:：\\-–=]\\s*' + W, 'i').exec(a);                // "থানা: X"
+    if (m && clean(m[1])) return titleCase(clean(m[1]).split(/\s+/).slice(0, 2).join(' ')).slice(0, 30);
+    m = new RegExp(W + '\\s+' + KW + '(?![a-zA-Z\\u0980-\\u09FF])', 'i').exec(a);                      // "X থানা"
+    if (m && clean(m[1]) && !/^(?:নাম|name|জেলা|district|zila|এবং|and|ও)$/i.test(clean(m[1]))) return titleCase(clean(m[1]).split(/\s+/).slice(-1)[0]).slice(0, 30);
+    m = new RegExp(KW + '\\s+(?:নাম|name)?\\s*' + W, 'i').exec(a);                                       // "থানা X"
+    if (m && clean(m[1])) return titleCase(clean(m[1]).split(/\s+/)[0]).slice(0, 30);
+    const low = bn2en(a).toLowerCase();
+    for (const l of LOCAL) if (/[a-z]/i.test(l) ? new RegExp('(?:^|[^a-z])' + escRe(l) + '(?![a-z])', 'i').test(low) : low.includes(l)) return titleCase(l);
+    return '';
+  }
   function areaOf(addr) {
     const a = bn2en(addr || '').trim(); if (!a) return { district: '', locality: '' };
     const low = a.toLowerCase().replace(/’/g, "'");
@@ -306,12 +322,12 @@
   }
   const sKey = o => normSource(o.source) || 'অজানা';
   const dKey = o => (o.area ? (areaOf(o.area).district || titleCase(String(o.area).trim())) : areaOf(o.address).district) || 'অজানা';
-  const lKey = o => areaOf(o.address).locality || 'অজানা';
+  const lKey = o => thanaOf(o.address) || 'থানা উল্লেখ নেই';
   function report(R, f, today) {
     const rows = R.onl.filter(x => f(x.o.date));
     const total = bucket(rows, () => 'all')[0] || { orders: 0, delivered: 0, returned: 0, cancelled: 0, active: 0, value: 0, dvalue: 0, success: null };
     const days = []; const t = new Date((today || new Date().toISOString().slice(0, 10)) + 'T00:00:00');
-    for (let i = 13; i >= 0; i--) { const d = new Date(t); d.setDate(d.getDate() - i); const k = d.toLocaleDateString('en-CA'); days.push({ k, c: rows.filter(x => x.o.date === k).length }); }
+    for (let i = 13; i >= 0; i--) { const d = new Date(t); d.setDate(d.getDate() - i); const k = d.toLocaleDateString('en-CA'); const dr = rows.filter(x => x.o.date === k); days.push({ k, c: dr.length, d: dr.filter(x => OUTCOME(x.o.status) === 'delivered').length }); }
     return {
       rows, total, days,
       bySource: bucket(rows, sKey),
@@ -321,6 +337,6 @@
     };
   }
 
-  g.BB = { codCfg, ST, OUT, REV, TRANSIT, n, live, bn2en, parseOrder, mapStatus, calc, agg, ledger, snap, SRC, matchSource, normSource, areaOf, DIST, mergeState, splitForSave, FIN_PAIR, migrate, report, OUTCOME, sKey, dKey, lKey };
+  g.BB = { thanaOf, codCfg, ST, OUT, REV, TRANSIT, n, live, bn2en, parseOrder, mapStatus, calc, agg, ledger, snap, SRC, matchSource, normSource, areaOf, DIST, mergeState, splitForSave, FIN_PAIR, migrate, report, OUTCOME, sKey, dKey, lKey };
   if (typeof module !== 'undefined') module.exports = g.BB;
 })(typeof window !== 'undefined' ? window : globalThis);

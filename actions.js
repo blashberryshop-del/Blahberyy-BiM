@@ -375,6 +375,10 @@ const A = {
   /* ---------- reports ---------- */
   rep(r) { view.rrange = r; render(); },
   rtab(t) { view.rtab = t; render(); },
+  customRange(fn) {
+    const set = (f, e) => { view.cfrom = f; view.cto = e; const name = fn.split('.')[1]; (A[name] || (() => { }))('custom'); };
+    sheet('তারিখ বাছুন', fld('f', 'শুরুর তারিখ', 'date', view.cfrom || today()) + fld('e', 'শেষ তারিখ', 'date', view.cto || today()) + '<p class="note">একই তারিখ দিলে শুধু ওই একদিনের রিপোর্ট।</p>', d => { const v = vals(d); if (!v.f || !v.e) { toast('দুটো তারিখই দিন'); return false; } set(v.f <= v.e ? v.f : v.e, v.f <= v.e ? v.e : v.f); }, 'দেখান');
+  },
   repGo(kind, key, st) {
     view.osrc = view.odist = view.oloc = view.owho = null; view.oq = '';
     if (kind === 'src') view.osrc = key; else if (kind === 'dist') view.odist = key; else if (kind === 'loc') view.oloc = key; else if (kind === 'who') view.owho = key;
@@ -385,7 +389,7 @@ const A = {
   },
   repCsv() {
     const P = view.rpt; if (!P) return; const rows = [['Group', 'Orders', 'Delivered', 'Returned', 'Cancelled', 'Active', 'Success %', 'Value', 'Delivered Value']];
-    [['SOURCE', P.bySource], ['DISTRICT', P.byDistrict], ['LOCALITY', P.byLocality], ['ADDED BY', P.byPerson]].forEach(([t, L]) => { rows.push([t]); L.forEach(b => rows.push([b.key, b.orders, b.delivered, b.returned, b.cancelled, b.active, b.success ?? '', Math.round(b.value), Math.round(b.dvalue)])); });
+    [['SOURCE', P.bySource], ['DISTRICT', P.byDistrict], ['THANA', P.byLocality], ['ADDED BY', P.byPerson]].forEach(([t, L]) => { rows.push([t]); L.forEach(b => rows.push([b.key, b.orders, b.delivered, b.returned, b.cancelled, b.active, b.success ?? '', Math.round(b.value), Math.round(b.dvalue)])); });
     A.dl(`blashberry-report-${today()}.csv`, '﻿' + rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv');
   },
   dl(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); },
@@ -513,6 +517,7 @@ const A = {
 window.A = A; window.closeSheet = closeSheet; window.$ = $;
 
 const SIMPLE = {
+  pacct: { title: 'ব্যক্তিগত এন্ট্রি', req: 'amount', fields: r => fld('date', 'তারিখ', 'date', r.date) + fld('type', 'ধরন', 'select', r.type || 'out', [['out', '➖ খরচ (পকেট থেকে গেলো)'], ['in', '➕ জমা (অ্যাকাউন্টে এলো)']]) + fld('cat', 'খাত (খরচের জন্য)', 'select', r.cat || PCAT[0], PCAT) + fld('note', 'বিবরণ', 'text', r.note) + fld('amount', 'টাকা', 'number', r.amount) },
   expenses: { title: 'খরচ', req: 'amount', fields: r => fld('date', 'তারিখ', 'date', r.date) + fld('category', 'ক্যাটাগরি', 'select', r.category || EXP[0], EXP) + fld('desc', 'বিবরণ', 'text', r.desc) + fld('amount', 'টাকা', 'number', r.amount) + fld('pay', 'পেমেন্ট', 'select', r.pay || 'Cash', PAY) },
   damages: { title: 'ড্যামেজ / লস', req: 'qty', fields: r => codeList(true) + fld('date', 'তারিখ', 'date', r.date) + `<label class="f"><span>প্রোডাক্ট কোড</span><input data-k="code" list="codes" value="${esc(r.code || '')}"></label>` + fld('qty', 'পরিমাণ', 'number', r.qty) + fld('reason', 'কারণ', 'select', r.reason || 'Damaged', DMG) + fld('note', 'নোট', 'text', r.note) },
   cash: { title: 'ক্যাশ এন্ট্রি', req: 'amount', fields: r => fld('date', 'তারিখ', 'date', r.date) + fld('type', 'ধরন', 'select', r.type || 'in', [['in', 'ক্যাশ ইন (আসলো)'], ['out', 'ক্যাশ আউট (গেলো)']]) + fld('desc', 'বিবরণ', 'text', r.desc) + fld('amount', 'টাকা', 'number', r.amount) },

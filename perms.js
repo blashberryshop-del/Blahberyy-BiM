@@ -45,6 +45,7 @@
     chatImages: { r: ['orders_view'], w: ['orders_view'], own: 'blob', lazy: true },   // full-size chat photos: fetched only when someone taps a photo (never bulk-synced)
     pushSubs: { r: ['orders_view'], w: ['orders_view'], own: 'sub', lazy: true },   // one doc per device that turned notifications on: who may be notified. Fetched only when something is sent
     tasks: { r: ['orders_view'], w: ['orders_view'], own: 'task', lazy: true },   // owner's task notebook: only the owner writes; a tagged teammate reads just their own tasks and may only tick them done
+    routine: { r: ['owner'], w: ['owner'] }, rdays: { r: ['owner'], w: ['owner'] }, pacct: { r: ['owner'], w: ['owner'] },   // owner-only personal tools (daily routine, personal account): no staff permission grants these
     settings: { r: ['*'], w: [] } // any active staff reads; only the owner writes
   };
   const ALLC = Object.keys(ACCESS), COLLS = ALLC.filter(c => !ACCESS[c].lazy);   // COLLS = collections synced to every device

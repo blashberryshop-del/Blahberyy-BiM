@@ -194,6 +194,21 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneAt', 'doneBy', 'doneName', '_u']));
       }
 
+      match /routine/{id} {
+        allow read: if can(shop, 'owner');
+        allow create, update: if (can(shop, 'owner')) && delOk(shop);
+      }
+
+      match /rdays/{id} {
+        allow read: if can(shop, 'owner');
+        allow create, update: if (can(shop, 'owner')) && delOk(shop);
+      }
+
+      match /pacct/{id} {
+        allow read: if can(shop, 'owner');
+        allow create, update: if (can(shop, 'owner')) && delOk(shop);
+      }
+
       match /settings/{id} {
         allow read: if isStaff(shop);
         allow create, update: if isOwner(shop);

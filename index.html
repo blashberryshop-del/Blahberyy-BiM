@@ -70,7 +70,7 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 .kc.tap{cursor:pointer}.kc.tap:active{transform:scale(.98)}
 .panel{background:var(--card);border-radius:var(--r);padding:12px 14px;margin:10px 0;box-shadow:var(--sh)}.pr{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:13.5px}.pr.tot{border-top:1px dashed var(--line);margin-top:6px;padding-top:9px;font-size:16px}
 .li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}.li:last-child{border:0}.li small{color:var(--mut)}
-.chart{width:100%;height:auto;display:block}.chart .ax{fill:var(--mut);font-size:9px}.chart .bar{fill:var(--b)}.chart .ln{fill:none;stroke:var(--ok);stroke-width:2}.chart .gl{stroke:var(--line);stroke-width:1}
+.chart{width:100%;height:auto;display:block}.chart .ax{fill:var(--mut);font-size:9px}.chart .bar{fill:var(--b)}.chart .bar2{fill:var(--ok)}.chart .bar.dim{opacity:.72}.chart .bar2.neg{fill:var(--err)}.chart .vl{fill:var(--txt);font-size:8px;opacity:.85}.chart .ax.cur{fill:var(--txt);font-weight:700}.chart .ax.fut{opacity:.4}.chart .ln{fill:none;stroke:var(--ok);stroke-width:2}.chart .gl{stroke:var(--line);stroke-width:1}
 .lg2{display:flex;gap:14px;font-size:12px;color:var(--mut);margin-top:6px}.lg2 i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 
 /* order cards, badges */
@@ -321,6 +321,8 @@ html[data-ui=glass]:not([data-fx=off]) #nav button.shine:after{content:"";positi
 @media(min-width:900px){html[data-ui]:not([data-fx=off]) #nav button.on{position:relative;z-index:2}}
 .tk{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line,#0001)}.tk.late b{color:var(--err)}.tkc{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid var(--b);background:transparent;color:transparent;display:grid;place-items:center;padding:0;cursor:pointer}.tkc:hover,.tkc:active{background:var(--b);color:#fff}.tkb{flex:1;min-width:0;cursor:pointer}.tkn{font-size:13px;opacity:.8;white-space:pre-wrap}.tkb small{display:block;opacity:.7}.tki{max-width:100%;max-height:150px;border-radius:10px;margin-top:6px;display:block}.tko{display:inline-block;margin-top:4px;font-size:12px;background:var(--bg2,#0001);padding:2px 8px;border-radius:20px}.tkE{opacity:.65;padding:10px 0;font-size:14px}.tkcnt{background:var(--b);color:#fff;border-radius:20px;padding:0 7px;font-size:12px}.tkchk{display:flex;gap:8px;align-items:center;padding:4px 0}.tk.done{opacity:.85}.tk.done .tkb b{text-decoration:line-through}
 .srcT{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}.srcT div{background:var(--soft2);border-radius:12px;padding:8px 10px}.srcT small{display:block;opacity:.75}.srcT b{font-size:20px}.srcT .z b{opacity:.4}
+.rtbar{height:7px;border-radius:7px;background:var(--soft2);overflow:hidden;margin:6px 0 8px}.rtbar i{display:block;height:100%;background:var(--ok);border-radius:7px;transition:width .3s}.rtbar i.bad{background:var(--err)}.rtg{font-size:12px;opacity:.65;margin:8px 0 2px}.rti{display:flex;gap:10px;align-items:center;padding:7px 0;cursor:pointer}.rti input{width:22px;height:22px;accent-color:var(--ok);flex:none}.rti.on span{text-decoration:line-through;opacity:.6}.rti small{margin-left:auto;opacity:.6}.rte{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line,#0001)}.rte small{display:block;opacity:.65}.rtx{display:flex;gap:4px}.rtdots{display:flex;gap:2px}.rtdots i{flex:1;height:10px;border-radius:2px;background:var(--soft2)}.rtdots i.y{background:var(--ok)}.rtdots i.n{background:var(--err);opacity:.75}.rtr{margin-bottom:8px}.pcb{margin-bottom:8px}
+.lgor{text-align:center;opacity:.6;margin:8px 0;font-size:13px}
 </style>
 </head>
 <body>
@@ -346,6 +348,7 @@ html[data-ui=glass]:not([data-fx=off]) #nav button.shine:after{content:"";positi
 <script src="team.js"></script>
 <script src="web.js"></script>
 <script src="tasks.js"></script>
+<script src="mine.js"></script>
 <script src="views.js"></script>
 <script src="boot.js"></script>
 </body>

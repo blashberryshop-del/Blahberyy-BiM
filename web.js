@@ -14,7 +14,7 @@ const webDone = id => Object.values(S.orders).some(o => o.webId === id);
 let _fixPay = 0;
 function webFixPay() {                                    // orders brought in by v26/v27 had no payment type, so they looked "paid" (COD 0) — make them Cash on Delivery
   if (_fixPay || !can('orders_edit')) return; _fixPay = 1;
-  Object.values(S.orders).forEach(o => { if (o.webId && !o.pay && !o._d && !['Delivered', 'Cancelled', 'Returned'].includes(o.status)) { o.pay = 'Cash on Delivery'; put('orders', o); } });
+  Object.values(S.orders).forEach(o => { if (o.webId && !o.pay && !o._d && !['Delivered', 'Cancelled', 'Returned'].includes(o.status)) { o.pay = 'Cash on Delivery'; put('orders', o, true); } });
 }
 async function webPoll(force) {
   webFixPay();

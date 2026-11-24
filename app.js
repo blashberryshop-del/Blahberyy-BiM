@@ -1,4 +1,4 @@
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.5.0';
 /* BlashBerry — app core: state, storage, permissions, cloud sync, auth */
 const { ST, n, live, parseOrder, mapStatus, calc, agg, snap, ledger, normSource, matchSource, areaOf, mergeState, splitForSave, migrate, report, FIN_PAIR } = BB;
 const PM = BBPerms, COLLS = PM.COLLS;
@@ -54,7 +54,7 @@ let pt; const persist = () => { clearTimeout(pt); pt = setTimeout(() => idb.set(
 
 /* ---------- identity & permissions ---------- */
 const cloudCfg = () => { try { return JSON.parse(localStorage.bb_fb || 'null'); } catch (e) { return null; } };
-let profile = (() => { if (!cloudCfg()) return { role: 'owner', name: 'Owner', local: true }; try { return JSON.parse(localStorage.bb_profile || 'null'); } catch (e) { return null; } })();
+let profile = (() => { if (!cloudCfg()) { try { return localStorage.bb_local === '1' ? { role: 'owner', name: 'Owner', local: true } : null; } catch (e) { return null; } } try { return JSON.parse(localStorage.bb_profile || 'null'); } catch (e) { return null; } })();
 const can = p => PM.has(profile, p);
 const canR = c => PM.canRead(profile, c), canW = c => PM.canWrite(profile, c);
 const isOwner = () => !!profile && profile.role === 'owner';
@@ -138,7 +138,10 @@ async function loadProfile(c) {
 }
 function mergeRemote(coll, snapx) {
   let ch = false, mig = false; const seen = {};
-  snapx.forEach(d => { const r = d.data(); seen[r.id] = r._u; const l = S[coll][r.id]; if (!l || l._u < r._u) { S[coll][r.id] = r; ch = true; } });
+  snapx.forEach(d => { const r = d.data(); seen[r.id] = r._u; const l = S[coll][r.id]; if (!l || l._u < r._u) {
+    // safety: an older copy from another device must not wipe a courier charge that was typed in (unless that newer copy's own history says the charge was edited)
+    if (coll === 'orders' && l && n(l.charge) > 0 && !n(r.charge) && !(r.hist || []).some(e => (e.t || 0) >= (l._u || 0) - 2000 && /চার্জ/.test(e.fields || ''))) { r.charge = l.charge; r._u = Date.now(); }
+    S[coll][r.id] = r; ch = true; } });
   if (ch) { S._v = 1; mig = migrate(S); }   // older cloud copies had cost fields inline: split them out
   if (coll === 'chat') { if (typeof chatCleanup === 'function') setTimeout(() => chatCleanup(), 1500); const cut = chatCutoff(); Object.values(S.chat).forEach(l => { if ((l.t || 0) < cut) { delete S.chat[l.id]; ch = true; } }); }   // expired chat is gone for good: never push it back
   const emptyCache = snapx.metadata && snapx.metadata.fromCache && snapx.size === 0;   // an empty cache-only snapshot must never make us 'restore' every local record

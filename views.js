@@ -2,15 +2,17 @@
 const { sKey, dKey, lKey } = BB;
 const canCost = () => can('costs_view') && can('purchases_view');                  // average cost needs both parts
 const canProfit = () => canCost() && can('expenses_view');
-const RANGES = [['today', 'আজ'], ['week', '৭ দিন'], ['month', 'এই মাস'], ['lmonth', 'গত মাস'], ['year', 'এই বছর'], ['all', 'সব']];
+const RANGES = [['today', 'আজ'], ['yday', 'গতকাল'], ['week', '৭ দিন'], ['month', 'এই মাস'], ['lmonth', 'গত মাস'], ['year', 'এই বছর'], ['all', 'সব']];
+const rangeLabel = k => k === 'custom' ? (view.cfrom ? (view.cfrom === view.cto ? view.cfrom : view.cfrom + ' → ' + view.cto) : 'কাস্টম') : (RANGES.find(x => x[0] === k) || [0, k])[1];
 const shiftD = (d, k) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + k); return x.toLocaleDateString('en-CA'); };
 const inR = r => {
   const t = today(), m = t.slice(0, 7), x = new Date(t + 'T00:00:00'); x.setDate(1); x.setMonth(x.getMonth() - 1); const lm = x.toLocaleDateString('en-CA').slice(0, 7), w0 = shiftD(t, -6);
-  return r === 'today' ? d => d === t : r === 'week' ? d => !!d && d >= w0 && d <= t : r === 'month' ? d => (d || '').slice(0, 7) === m : r === 'lmonth' ? d => (d || '').slice(0, 7) === lm : r === 'year' ? d => (d || '').slice(0, 4) === t.slice(0, 4) : () => true;
+  if (r === 'custom') { const f = view.cfrom || t, e = view.cto || t; return d => !!d && d >= f && d <= e; }
+  return r === 'today' ? d => d === t : r === 'yday' ? d => d === shiftD(t, -1) : r === 'week' ? d => !!d && d >= w0 && d <= t : r === 'month' ? d => (d || '').slice(0, 7) === m : r === 'lmonth' ? d => (d || '').slice(0, 7) === lm : r === 'year' ? d => (d || '').slice(0, 4) === t.slice(0, 4) : () => true;
 };
 const head = (t, btn) => `<div class="vh"><h2>${t}</h2><div class="vha">${btn || ''}</div></div>`;
 const kc = (icon, label, val, cls = '', click = '') => `<div class="kc ${cls} ${click ? 'tap' : ''}" ${click ? `onclick="${click}"` : ''}><span class="kic">${ico(icon, 17)}</span><small>${label}</small><b>${val}</b></div>`;
-const rangeChips = (cur, fn) => `<div class="chips sc">${RANGES.map(([k, l]) => `<button class="chip ${cur === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
+const rangeChips = (cur, fn) => `<div class="chips sc">${RANGES.map(([k, l]) => `<button class="chip ${cur === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}<button class="chip ${cur === 'custom' ? 'on' : ''}" onclick="A.customRange('${fn}')">📅 ${cur === 'custom' && view.cfrom ? (view.cfrom === view.cto ? fmtD(view.cfrom) : fmtD(view.cfrom) + ' – ' + fmtD(view.cto)) : 'তারিখ বাছুন'}</button></div>`;
 const emptyBox = (icon, msg) => `<div class="empty">${ico(icon, 34)}<div>${msg}</div></div>`;
 const greet = () => { const h = new Date().getHours(); return h < 5 ? 'শুভ রাত্রি' : h < 12 ? 'শুভ সকাল' : h < 15 ? 'শুভ দুপুর' : h < 18 ? 'শুভ বিকাল' : h < 20 ? 'শুভ সন্ধ্যা' : 'শুভ রাত্রি'; };
 const lockNote = what => `<div class="panel"><div class="pr"><span>${ico('lock', 15)} ${what}</span><b class="muted">লুকানো</b></div></div>`;
@@ -24,13 +26,32 @@ function donut(parts, label) {
   return `<div class="dn"><svg viewBox="0 0 120 120" width="132" height="132" role="img" aria-label="${label}"><circle cx="60" cy="60" r="42" fill="none" stroke="var(--soft2)" stroke-width="14"/>${arcs}<text x="60" y="58" text-anchor="middle" class="dnn">${tot}</text><text x="60" y="73" text-anchor="middle" class="dnl">${label}</text></svg><div class="dnl2">${parts.map(p => `<div><i style="background:${p[2]}"></i><span>${p[0]}</span><b>${p[1]}</b></div>`).join('')}</div></div>`;
 }
 function chartSvg(months, showProfit) {
-  const W = 320, H = 132, pl = 4, pb = 18, pt = 8, bw = (W - pl * 2) / 12;
-  const mx = Math.max(1, ...months.map(m => m.sales), ...(showProfit ? months.map(m => m.booked) : [0])), mn = showProfit ? Math.min(0, ...months.map(m => m.booked)) : 0;
-  const y = v => pt + (H - pt - pb) * (1 - (v - mn) / (mx - mn));
-  const bars = months.map((m, i) => { const x = pl + i * bw + bw * .18, y0 = y(Math.max(m.sales, 0)), h = Math.max(1.5, y(0) - y0); return `<rect class="bar" x="${x.toFixed(1)}" y="${(y(0) - h).toFixed(1)}" width="${(bw * .64).toFixed(1)}" height="${h.toFixed(1)}" rx="3"/>`; }).join('');
-  const line = showProfit ? `<polyline class="ln" points="${months.map((m, i) => `${(pl + i * bw + bw / 2).toFixed(1)},${y(m.booked).toFixed(1)}`).join(' ')}"/>` : '';
-  const lab = months.map((m, i) => `<text class="ax" x="${(pl + i * bw + bw / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle">${i + 1}</text>`).join('');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="মাসওয়ারি বিক্রি"><line class="gl" x1="0" x2="${W}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}"/>${bars}${line}${lab}</svg><div class="lg2"><span><i style="background:var(--b)"></i>বিক্রি</span>${showProfit ? '<span><i style="background:var(--ok)"></i>নেট প্রফিট</span>' : ''}<span>সর্বোচ্চ ${money(mx)}</span></div>`;
+  const W = 360, H = 200, pl = 36, pr = 6, pb = 22, pt = 18, cw = (W - pl - pr) / 12, now = new Date(), cm = now.getMonth(), cy = now.getFullYear();
+  const yr = months.year || cy, fut = i => yr > cy || (yr === cy && i > cm);
+  const vals = months.flatMap((m, i) => fut(i) ? [] : [m.sales, ...(showProfit ? [m.booked] : [])]);
+  const top = Math.max(1, ...vals), low = showProfit ? Math.min(0, ...vals) : 0;
+  const step = (() => { const raw = (top - low) / 4, p = Math.pow(10, Math.floor(Math.log10(raw || 1))); const f = raw / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; })();
+  const mx = Math.ceil(top / step) * step, mn = Math.floor(low / step) * step;
+  const y = x => pt + (H - pt - pb) * (1 - (x - mn) / (mx - mn)), sh = x => { const a = Math.abs(x); return (x < 0 ? '-' : '') + (a >= 1e5 ? (a / 1e5).toFixed(a % 1e5 ? 1 : 0).replace(/\.0$/, '') + 'L' : a >= 1e3 ? (a / 1e3).toFixed(a % 1e3 ? 1 : 0).replace(/\.0$/, '') + 'k' : Math.round(a)); };
+  let grid = ''; for (let g = mn; g <= mx + 1e-6; g += step) grid += `<line class="gl" x1="${pl}" x2="${W - pr}" y1="${y(g).toFixed(1)}" y2="${y(g).toFixed(1)}"/><text class="ax" x="${pl - 4}" y="${(y(g) + 3).toFixed(1)}" text-anchor="end">${sh(g)}</text>`;
+  const MN = ['জানু', 'ফেব্রু', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'], two = showProfit, bw = cw * (two ? .34 : .6);
+  const bar = (cx, val, cls) => { const y0 = y(Math.max(val, 0)), y1 = y(Math.min(val, 0)), h = Math.max(1.5, y1 - y0); return `<rect class="${cls}" x="${(cx - (cls === 'bar' && two ? bw : cls === 'bar2' ? 0 : bw / 2)).toFixed(1)}" y="${y0.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2.5"/>`; };
+  let bars = '', lab = '';
+  months.forEach((m, i) => {
+    const cx = pl + i * cw + cw / 2, f = fut(i), cur = yr === cy && i === cm;
+    if (!f) { if (m.sales) bars += bar(cx, m.sales, 'bar'); if (two && m.booked) bars += bar(cx, m.booked, m.booked < 0 ? 'bar2 neg' : 'bar2'); if (m.sales) lab += `<text class="vl" x="${cx.toFixed(1)}" y="${(y(m.sales) - 3).toFixed(1)}" text-anchor="middle">${sh(m.sales)}</text>`; }
+    lab += `<text class="ax${cur ? ' cur' : ''}${f ? ' fut' : ''}" x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle">${MN[i]}</text>`;
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="মাসওয়ারি বিক্রি">${grid}${bars}${lab}</svg><div class="lg2"><span><i style="background:var(--b)"></i>বিক্রি</span>${showProfit ? '<span><i style="background:var(--ok)"></i>নেট প্রফিট</span>' : ''}<span class="muted">k = হাজার, L = লাখ (৳)</span></div>`;
+}
+
+function daysChart(days) {
+  const W = 360, H = 150, pl = 24, pr = 4, pb = 30, pt = 16, cw = (W - pl - pr) / days.length, t = today(), mx = Math.max(3, ...days.map(d => d.c)), step = mx <= 6 ? 1 : mx <= 12 ? 2 : mx <= 30 ? 5 : 10, top = Math.ceil(mx / step) * step;
+  const y = x => pt + (H - pt - pb) * (1 - x / top), WD = ['র', 'সো', 'ম', 'বু', 'বৃ', 'শু', 'শ'];
+  let g = ''; for (let k = 0; k <= top; k += step) g += `<line class="gl" x1="${pl}" x2="${W - pr}" y1="${y(k).toFixed(1)}" y2="${y(k).toFixed(1)}"/><text class="ax" x="${pl - 4}" y="${(y(k) + 3).toFixed(1)}" text-anchor="end">${k}</text>`;
+  const b = days.map((d, i) => { const cx = pl + i * cw + cw / 2, bw = cw * .62, h = Math.max(d.c ? 2 : 1, y(0) - y(d.c)), dh = d.d ? Math.max(1, y(0) - y(d.d)) : 0, cur = d.k === t, wd = new Date(d.k + 'T00:00:00').getDay();
+    return `<rect class="bar${cur ? '' : ' dim'}" x="${(cx - bw / 2).toFixed(1)}" y="${(y(0) - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2.5"/>${dh ? `<rect class="bar2" x="${(cx - bw / 2).toFixed(1)}" y="${(y(0) - dh).toFixed(1)}" width="${bw.toFixed(1)}" height="${dh.toFixed(1)}" rx="2.5"/>` : ''}${d.c ? `<text class="vl" x="${cx.toFixed(1)}" y="${(y(0) - h - 3).toFixed(1)}" text-anchor="middle">${d.c}</text>` : ''}<text class="ax${cur ? ' cur' : ''}" x="${cx.toFixed(1)}" y="${H - 17}" text-anchor="middle">${d.k.slice(8)}</text><text class="ax${cur ? ' cur' : ''}" x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle">${WD[wd]}</text>`; }).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="গত ১৪ দিনের অর্ডার">${g}${b}</svg><div class="lg2"><span><i style="background:var(--b)"></i>মোট অর্ডার</span><span><i style="background:var(--ok)"></i>ডেলিভারড</span><span class="muted">নিচে: তারিখ ও বার</span></div>`;
 }
 
 /* ---------- home ---------- */
@@ -43,10 +64,10 @@ function vHome() {
   const full = can('reports_full'), r = full ? (view.range || 'month') : 'today', TT = full ? 'মোট' : 'আজকের', a = agg(R, inR(r)), at = agg(R, inR('today')), s = snap(R), P = Object.values(R.prod);
   const ov = can('orders_view'), sv = can('sales_view'), cc = canCost(), cp = canProfit();
   const low = P.filter(x => x.status !== 'OK').sort((x, y) => x.stock - y.stock).slice(0, 8), top = [...P].sort((x, y) => y.sold - x.sold).filter(x => x.sold > 0).slice(0, 5);
-  const y = today().slice(0, 4), months = full && (ov || sv) ? [...Array(12)].map((_, i) => agg(R, d => (d || '').startsWith(y + '-' + String(i + 1).padStart(2, '0')))) : null;
+  const y = today().slice(0, 4), months = full && (ov || sv) ? [...Array(12)].map((_, i) => agg(R, d => (d || '').startsWith(y + '-' + String(i + 1).padStart(2, '0')))) : null; if (months) months.year = +y;
   const hero = `<div class="hero"><small>${greet()} · ${fmtD(today())}</small><h1>${esc(cfg().shop)}</h1><div class="hst">${ov ? `<div><span>আজকের অর্ডার</span><b>${at.orders}</b></div>` : ''}${ov || sv ? `<div><span>আজকের বিক্রি</span><b>${money(at.sales)}</b></div>` : ''}${ov ? `<div><span>কুরিয়ারে</span><b>${a.withCourier}</b></div>` : ''}</div></div>`;
   let h = (typeof webBanner === 'function' ? webBanner() : '') + (ov ? `<input class="search" id="hq" style="margin-bottom:10px" placeholder="🔎 যেকোনো অর্ডার খুঁজুন — নাম / ফোন / নং / কনসাইনমেন্ট (সব স্ট্যাটাস)" value="${esc(view.hq || '')}" oninput="view.hq=this.value;A.hsearch()"><div id="hres">${hsearchHtml()}</div>` : '') + hero + (full ? `<div class="chips sc" style="margin-top:14px">${RANGES.map(([k, l]) => `<button class="chip ${r === k ? 'on' : ''}" onclick="A.range('${k}')">${l}</button>`).join('')}</div>` : '<div class="note" style="margin:12px 0 4px">📅 হোমে শুধু আজকের হিসাব দেখানো হচ্ছে</div>');
-  h += typeof vTasks === 'function' ? vTasks() : '';
+  h += (typeof vRoutine === 'function' ? vRoutine() : '') + (typeof vTasks === 'function' ? vTasks() : '');
   if (ov) {
     const okP = P.filter(x => x.status === 'OK').length, lowP = P.filter(x => x.status === 'Low Stock').length, outP = P.length - okP - lowP;
     const recent = [...R.onl].sort((x, y) => n(y.o.no) - n(x.o.no)).slice(0, 5);
@@ -56,7 +77,7 @@ function vHome() {
     h += `</div><div class="panel"><div class="oh"><b class="ph">সাম্প্রতিক অর্ডার</b><a class="lnk" onclick="A.nav('orders')">সব দেখুন</a></div>${recent.map(({ o, r }) => `<div class="li rc" onclick="A.order('${o.id}')"><span class="av">${esc((o.customer || '?').trim().charAt(0).toUpperCase())}</span><div class="lm"><b>#${o.no} ${esc(o.customer || '')}</b><small>${fmtD(o.date)} · ${money(r.total)}</small></div>${badge(o.status)}</div>`).join('') || '<p class="muted">এখনো অর্ডার নেই</p>'}</div>`;
   }
   if (ov || sv || can('purchases_view') || can('expenses_view')) {
-    h += `<h3>পারফরম্যান্স</h3><div class="kg">${ov || sv ? kc('chart', TT + ' বিক্রি', money(a.sales)) : ''}${can('purchases_view') ? kc('cart', TT + ' ক্রয়', money(a.purchase)) : ''}${can('expenses_view') ? kc('receipt', TT + ' খরচ', money(a.exp)) : ''}${cp ? kc('wallet', 'নেট প্রফিট (কুরিয়ার/COD চার্জ বাদে)', money(a.booked), a.booked < 0 ? 'neg' : 'pos') + kc('check', 'রিয়েলাইজড প্রফিট (ডেলিভারড)', money(a.realized), a.realized < 0 ? 'neg' : 'pos') : ''}${cc ? kc('alert', 'ড্যামেজ/লস', money(a.dmg)) : ''}</div>`;
+    h += `<h3>পারফরম্যান্স</h3><div class="kg">${ov || sv ? kc('chart', TT + ' বিক্রি', money(a.sales)) : ''}${can('purchases_view') ? kc('cart', TT + ' ক্রয়', money(a.purchase)) : ''}${can('expenses_view') ? kc('receipt', TT + ' খরচ', money(a.exp)) : ''}${cp ? kc('wallet', 'নেট প্রফিট (কুরিয়ার/COD চার্জ বাদে)', money(a.booked), a.booked < 0 ? 'neg' : 'pos') : ''}${cc ? kc('alert', 'ড্যামেজ/লস', money(a.dmg)) : ''}</div>`;
     if (cp && ov) h += `<h3>ডেলিভারড ও কুরিয়ার চার্জ</h3><div class="kg">${kc('check', 'ডেলিভারড প্রফিট (শুধু প্রোডাক্ট)', money(a.dProfit), a.dProfit < 0 ? 'neg' : 'pos')}${kc('wallet', 'ডেলিভারড নেট প্রফিট', money(a.dNet), a.dNet < 0 ? 'neg' : 'pos')}${kc('truck', 'কুরিয়ার চার্জ', money(a.courier))}${kc('receipt', 'COD চার্জ + আলাদা ফি', money(a.codFee + a.cfee))}${a.retInc ? kc('swap', 'রিটার্নে পাওয়া চার্জ', money(a.retInc), 'pos') : ''}</div><p class="note">ডেলিভারড প্রফিট = শুধু ডেলিভারড অর্ডারের (বিক্রয়মূল্য − কেনা দাম)। ডেলিভারড নেট = ডেলিভারড গ্রস − কুরিয়ার চার্জ − COD চার্জ − ফি + রিটার্ন চার্জ − খরচ − ড্যামেজ।</p>`;
     if (!cp && (ov || sv)) h += lockNote('প্রফিটের হিসাব');
   }
@@ -132,7 +153,7 @@ function orderListHtml() {
 }
 function vOrders() {
   const f = view.of || 'all', drill = !!(view.osrc || view.odist || view.oloc || view.owho), base = R.onl.filter(x => !cStage(x.o));
-  const fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'এলাকা: ' + view.oloc], view.owho && ['owho', 'যোগ করেছেন: ' + view.owho], drill && f !== 'all' && ['of', 'স্ট্যাটাস: ' + (STBN[f] || f)], view.orange && view.orange !== 'all' && ['orange', RANGES.find(x => x[0] === view.orange)[1]]].filter(Boolean);
+  const fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'থানা: ' + view.oloc], view.owho && ['owho', 'যোগ করেছেন: ' + view.owho], drill && f !== 'all' && ['of', 'স্ট্যাটাস: ' + (STBN[f] || f)], view.orange && view.orange !== 'all' && ['orange', rangeLabel(view.orange)]].filter(Boolean);
   const sm = !!view.sel, cnt = sm ? Object.keys(view.sel).length : 0;
   const callChips = [['todo', '📞 কল বাকি'], ...Object.keys(CALLS).filter(k => k !== 'ok').map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল'], ['urgent', '🔥 জরুরি'], ['', 'সব']];
   return (sm ? `<div class="selbar"><b>${cnt} টা সিলেক্ট</b><button class="btn sm" onclick="A.selLabel()">${ico('printer', 14)} লেবেল</button>${can('orders_status') ? '<button class="btn sm ghost" onclick="A.selStatus()">স্ট্যাটাস</button>' : ''}<button class="btn sm ghost" onclick="A.selAll()">সব</button><button class="btn sm ghost" onclick="A.selMode()">বাতিল</button></div>` : '') +
@@ -246,10 +267,10 @@ function vReports() {
   return head('রিপোর্ট', `<button class="btn sm ghost" onclick="A.repCsv()">${ico('down', 14)} CSV</button>`) + rangeChips(r, 'A.rep') +
     `<div class="panel"><div class="oh"><span class="muted">মোট অর্ডার</span><b style="font-size:22px">${T.orders}</b></div><div class="sr"><i style="width:${pct(del.n)}%;background:var(--ok)"></i><i style="width:${pct(ret.n)}%;background:var(--warn)"></i><i style="width:${pct(can_.n)}%;background:var(--err)"></i><i style="width:${pct(act.n)}%;background:var(--info)"></i></div><div class="os">ডেলিভারি সাকসেস রেট (ডেলিভারড ÷ ডেলিভারড+রিটার্ন+ক্যানসেল): <b>${T.success == null ? '—' : T.success + '%'}</b></div></div>` +
     `<div class="kg">${tile('Delivered', 'ডেলিভারড', del, 'pos')}${tile('Returned', 'রিটার্ন', ret, ret.n ? 'neg' : '')}${tile('Cancelled', 'ক্যানসেল', can_, can_.n ? 'neg' : '')}${tile('Pending', 'চলমান', act, '')}</div>` +
-    `<h3>গত ১৪ দিনের অর্ডার</h3><div class="panel"><div class="bars">${P.days.map(d => `<div title="${d.k}: ${d.c}" style="height:${Math.max(3, Math.round(d.c / mxd * 66))}px"></div>`).join('')}</div></div>` +
+    `<h3>গত ১৪ দিনের অর্ডার <span class="muted" style="font-weight:400">(মোট ${P.days.reduce((s, d) => s + d.c, 0)} · গড় ${(P.days.reduce((s, d) => s + d.c, 0) / 14).toFixed(1)}/দিন)</span></h3><div class="panel">${daysChart(P.days)}</div>` +
     (() => { const TD = report(R, inR('today'), today()), m = {}; TD.bySource.forEach(b => m[b.key] = b); const keys = [...SOURCES, ...TD.bySource.map(b => b.key).filter(k => !SOURCES.includes(k))]; return `<h3>আজকের অর্ডার — সোর্স অনুযায়ী <span class="muted" style="font-weight:400">(মোট ${TD.total.orders})</span></h3><div class="panel"><div class="srcT">${keys.map(k => { const b = m[k]; return `<div class="${b ? '' : 'z'}"><small>${esc(k)}</small><b>${b ? b.orders : 0}</b></div>`; }).join('')}</div></div>`; })() +
-    `<h3>কোথা থেকে কয়টা অর্ডার</h3><div class="seg"><button class="${tab === 'src' ? 'on' : ''}" onclick="A.rtab('src')">সোর্স</button><button class="${tab === 'dist' ? 'on' : ''}" onclick="A.rtab('dist')">জেলা</button><button class="${tab === 'loc' ? 'on' : ''}" onclick="A.rtab('loc')">এলাকা</button><button class="${tab === 'who' ? 'on' : ''}" onclick="A.rtab('who')">কে যোগ করেছে</button></div>` +
-    `<div class="panel" style="overflow-x:auto;padding:6px 8px"><table class="lg"><tr><th>${tab === 'src' ? 'সোর্স' : tab === 'dist' ? 'জেলা' : tab === 'who' ? 'নাম' : 'এলাকা'}</th><th>অর্ডার</th><th>✓</th><th>↩</th><th>✕</th><th>সফল%</th><th>মূল্য</th></tr>${list.slice(0, 60).map((b, i) => `<tr class="tap" onclick="A.repGoI('${tab}',${i})"><td><b>${esc(b.key)}</b></td><td>${b.orders}</td><td class="gr">${b.delivered}</td><td class="warn">${b.returned}</td><td class="rd">${b.cancelled}</td><td>${b.success == null ? '—' : b.success + '%'}</td><td>${money(b.value)}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">এই সময়ে অর্ডার নেই</td></tr>`}</table></div>` +
+    `<h3>কোথা থেকে কয়টা অর্ডার</h3><div class="seg"><button class="${tab === 'src' ? 'on' : ''}" onclick="A.rtab('src')">সোর্স</button><button class="${tab === 'dist' ? 'on' : ''}" onclick="A.rtab('dist')">জেলা</button><button class="${tab === 'loc' ? 'on' : ''}" onclick="A.rtab('loc')">থানা</button><button class="${tab === 'who' ? 'on' : ''}" onclick="A.rtab('who')">কে যোগ করেছে</button></div>` +
+    `<div class="panel" style="overflow-x:auto;padding:6px 8px"><table class="lg"><tr><th>${tab === 'src' ? 'সোর্স' : tab === 'dist' ? 'জেলা' : tab === 'who' ? 'নাম' : 'থানা'}</th><th>অর্ডার</th><th>✓</th><th>↩</th><th>✕</th><th>সফল%</th><th>মূল্য</th></tr>${list.slice(0, 60).map((b, i) => `<tr class="tap" onclick="A.repGoI('${tab}',${i})"><td><b>${esc(b.key)}</b></td><td>${b.orders}</td><td class="gr">${b.delivered}</td><td class="warn">${b.returned}</td><td class="rd">${b.cancelled}</td><td>${b.success == null ? '—' : b.success + '%'}</td><td>${money(b.value)}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">এই সময়ে অর্ডার নেই</td></tr>`}</table></div>` +
     (tab === 'who' ? (() => {
       const ppl = P.byPerson.map(b => b.key), srcs = [...SOURCES, ...P.bySource.map(b => b.key).filter(k => !SOURCES.includes(k))], cnt = (p, f) => R.onl.filter(({ o }) => (o.by || 'অজানা') === p && f(o)).length;
       const inRng = inR(r), days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d.toLocaleDateString('en-CA'); });
@@ -257,12 +278,13 @@ function vReports() {
       return `<h3>কে কোন সোর্সে কয়টা অর্ডার <span class="muted" style="font-weight:400">(উপরের সময় অনুযায়ী)</span></h3><div class="panel" style="padding:6px 8px;overflow-x:auto"><table class="lg"><tr><th>নাম</th>${th(srcs.map(esc))}<th>মোট</th></tr>${ppl.map(p => `<tr><td><b>${esc(p)}</b></td>${srcs.map(s => { const c = cnt(p, o => inRng(o.date) && sKey(o) === s); return `<td${c ? '' : ' class="muted"'}>${c}</td>`; }).join('')}<td><b>${cnt(p, o => inRng(o.date))}</b></td></tr>`).join('') || '<tr><td class="muted">এই সময়ে অর্ডার নেই</td></tr>'}</table></div>` +
         `<h3>কে কোন দিন কয়টা অর্ডার <span class="muted" style="font-weight:400">(গত ৭ দিন)</span></h3><div class="panel" style="padding:6px 8px;overflow-x:auto"><table class="lg"><tr><th>নাম</th>${th(days.map(d => d === today() ? 'আজ' : d.slice(8) + '/' + d.slice(5, 7)))}</tr>${[...new Set([...ppl, ...R.onl.filter(({ o }) => days.includes(o.date)).map(({ o }) => o.by || 'অজানা')])].map(p => `<tr><td><b>${esc(p)}</b></td>${days.map(d => { const c = cnt(p, o => o.date === d); return `<td${c ? '' : ' class="muted"'}>${c}</td>`; }).join('')}</tr>`).join('')}</table></div>`;
     })() : '') +
-    `<p class="note">লাইনে ট্যাপ করলে ওই সোর্স/এলাকার অর্ডারগুলো দেখাবে। এলাকা ঠিকানা থেকে অটো ধরা হয়; ভুল হলে অর্ডারে "জেলা/এলাকা" ঘরে ঠিক করে দিন। ✓ ডেলিভারড · ↩ রিটার্ন · ✕ ক্যানসেল</p>`;
+    `<p class="note">লাইনে ট্যাপ করলে ওই সোর্স/থানার অর্ডারগুলো দেখাবে। থানা ঠিকানা থেকে অটো ধরা হয় (ঠিকানায় "থানা: …" বা "… থানা" থাকলে); না পেলে "থানা উল্লেখ নেই" দেখায়। ✓ ডেলিভারড · ↩ রিটার্ন · ✕ ক্যানসেল</p>`;
 }
 
 /* ---------- more menu, staff, logs, login ---------- */
 function vMore() {
   const items = [['chat', 'chat', 'টিম চ্যাট', 'orders_view'], ['products', 'tag', 'প্রোডাক্ট ও স্টক', 'products_view'], ['combos', 'layers', 'কম্বো', 'products_view'], ['reports', 'chart', 'রিপোর্ট', 'reports_full'], ['purchases', 'cart', 'ক্রয়', 'purchases_view'], ['suppliers', 'factory', 'সাপ্লায়ার', 'purchases_view'], ['expenses', 'receipt', 'খরচ', 'expenses_view'], ['damages', 'alert', 'ড্যামেজ/লস', 'damages_view'], ['cash', 'wallet', 'ক্যাশ বুক', 'cash_view'], ['loans', 'swap', 'লোন', 'loans_view'], ['team', 'chart', 'টার্গেট ও স্যালারি', 'orders_view'], ['staff', 'users', 'স্টাফ ও রোল', '#owner'], ['logs', 'list', 'কার্যকলাপ লগ', '#owner'], ['trash', 'box', 'ডিলিট করা অর্ডার', 'delete']].filter(x => x[3] === '#owner' ? isOwner() && !profile.local : can(x[3]));
+  if (isOwner()) items.unshift(['routine', 'check', 'আজকের রুটিন', '#owner'], ['personal', 'wallet', 'ব্যক্তিগত হিসাব', '#owner']);
   const who = profile ? `${esc(profile.name || '')} · ${profile.local ? 'লোকাল মোড' : profile.role === 'owner' ? 'Owner' : 'স্টাফ'}` : '';
   return head('আরও', '') + `<div class="grid">${items.map(([k, i, l]) => `<button class="gi" onclick="A.nav('${k}')"><span>${ico(i, 24)}</span>${l}</button>`).join('')}</div>` +
     (isOwner() ? `<button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="A.labelSheet([],1)">${ico('printer', 18)} লেবেল ডিজাইন</button>` : '') + `<button class="btn ghost" style="width:100%" onclick="A.settings()">${ico('gear', 18)} সেটিংস, থিম ও ব্যাকআপ</button><p class="note" style="text-align:center">${who}</p><p class="note" style="text-align:center">Copyright © MD NURNABI</p>`;
@@ -287,8 +309,8 @@ function vLogs() {
 function vLogin() {
   const c = cloudCfg() || {};
   if (SY.lgReset) return `<div class="login lg-in"><div class="lgo">🔑</div><h2>পাসওয়ার্ড রিসেট</h2><p class="muted">${SY.rmsg ? esc(SY.rmsg) : 'আপনার ইমেইল দিন — রিসেট লিংক সেই ইমেইলে যাবে।'}</p>${c.config ? '' : fld('code', 'সেটআপ কোড (Owner দিয়েছেন)', 'textarea', '')}${fld('email', 'ইমেইল', 'email', c.email || '')}<button class="btn" onclick="A.lgSend()">রিসেট লিংক পাঠান</button><button class="btn ghost" onclick="A.lgFlip()">← লগইনে ফিরুন</button></div>`;
-  return `<div class="login lg-in"><div class="lgo">BB</div><h2>BlashBerry লগইন</h2><p class="muted">${SY.err ? `<span class="rd">${esc(SY.err)}</span>` : 'আপনার ইমেইল ও পাসওয়ার্ড দিয়ে ঢুকুন'}</p>${c.config ? '' : fld('code', 'সেটআপ কোড (Owner দিয়েছেন)', 'textarea', '')}${fld('email', 'ইমেইল', 'email', c.email || '')}${fld('pass', 'পাসওয়ার্ড', 'password', '')}<button class="btn" onclick="A.login()">লগইন</button><button class="btn ghost sm" onclick="A.lgFlip()">পাসওয়ার্ড ভুলে গেছেন?</button><button class="btn ghost" onclick="A.login(true)">নতুন Owner অ্যাকাউন্ট খুলুন</button>` +
-    `<p class="note">স্টাফ হলে শুধু "লগইন" চাপুন (অ্যাকাউন্ট Owner খুলে দেবেন)। "নতুন Owner অ্যাকাউন্ট" শুধু দোকানের মালিক প্রথমবার সেটআপের সময় চাপবেন।</p><button class="btn ghost sm" onclick="A.cloudOff()">ক্লাউড বন্ধ করে লোকাল মোডে যান</button></div>`;
+  return `<div class="login lg-in"><div class="lgo">BB</div><h2>BlashBerry লগইন</h2><p class="muted">${SY.err ? `<span class="rd">${esc(SY.err)}</span>` : 'ইমেইল বা মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে ঢুকুন'}</p>${c.config ? '' : fld('code', 'সেটআপ কোড (Owner দিয়েছেন)', 'textarea', '')}${fld('email', 'ইমেইল বা মোবাইল নম্বর', 'text', c.email && !/@phone\.bim\.local$/.test(c.email) ? c.email : '')}${fld('pass', 'পাসওয়ার্ড', 'password', '')}<button class="btn" onclick="A.login()">লগইন</button><button class="btn ghost sm" onclick="A.lgFlip()">পাসওয়ার্ড ভুলে গেছেন?</button><button class="btn ghost" onclick="A.login(true)">নতুন অ্যাকাউন্ট খুলুন</button><div class="lgor"><span>অথবা</span></div><button class="btn ghost" onclick="A.localMode()">📱 লোকাল মোডে ঢুকুন (এই ফোনেই, ক্লাউড ছাড়া)</button>` +
+    `<p class="note">স্টাফ হলে শুধু "লগইন" চাপুন (অ্যাকাউন্ট Owner খুলে দেবেন)। "নতুন Owner অ্যাকাউন্ট" শুধু দোকানের মালিক প্রথমবার সেটআপের সময় চাপবেন।</p></div>`;
 }
 
 Object.assign(A, {
@@ -299,14 +321,15 @@ Object.assign(A, {
   copyLink() { const l = location.origin + location.pathname + '#setup=' + setupCode(); navigator.clipboard.writeText(l).then(() => toast('✓ লিংক কপি হয়েছে — স্টাফকে পাঠান (পাসওয়ার্ড আলাদা দিন)'), () => prompt('কপি করুন:', l)); },
   async login(create) {
     const v = vals($('#main')), old = cloudCfg() || {};
-    try { let nc = Object.assign({}, old); if (v.code) { const p = parseSetup(v.code); nc.config = p.config; nc.shop = p.shop || nc.shop || 'blashberry'; } if (!nc.config) return toast('সেটআপ কোড দিন'); if (!v.email || !v.pass) return toast('ইমেইল ও পাসওয়ার্ড দিন'); nc.email = v.email; nc.pass = v.pass; nc.create = !!create; localStorage.bb_fb = JSON.stringify(nc); SY.err = ''; localStorage.removeItem('bb_profile'); profile = null; toast('লগইন হচ্ছে…'); await syncStart(); render(); } catch (e) { SY.err = authMsg(e); render(); }
+    try { let nc = Object.assign({}, old); if (v.code) { const p = parseSetup(v.code); nc.config = p.config; nc.shop = p.shop || nc.shop || 'blashberry'; } if (!nc.config) return toast('সেটআপ কোড দিন'); if (!v.email || !v.pass) return toast('ইমেইল/মোবাইল ও পাসওয়ার্ড দিন'); { let em = String(v.email).trim(); const dg = BB.bn2en(em).replace(/[\s-]/g, '').replace(/^\+?88/, ''); if (/^0?1\d{9}$/.test(dg)) em = (dg.length === 10 ? '0' + dg : dg) + '@phone.bim.local'; v.email = em; } nc.email = v.email; nc.pass = v.pass; nc.create = !!create; localStorage.bb_fb = JSON.stringify(nc); SY.err = ''; localStorage.removeItem('bb_profile'); profile = null; toast('লগইন হচ্ছে…'); await syncStart(); render(); } catch (e) { SY.err = authMsg(e); render(); }
   },
-  cloudOff() { if (!confirm('ক্লাউড বন্ধ করে এই ফোনের লোকাল ডেটা নিয়ে চলবেন?')) return; localStorage.removeItem('bb_fb'); localStorage.removeItem('bb_profile'); location.reload(); }
+  localMode() { if (cloudCfg() && !confirm('লোকাল মোডে ক্লাউড সংযোগ বন্ধ থাকবে (পরে আবার লগইন করা যাবে)। চালিয়ে যাবেন?')) return; localStorage.bb_local = '1'; localStorage.removeItem('bb_fb'); localStorage.removeItem('bb_profile'); location.reload(); },
+  cloudOff() { if (!confirm('ক্লাউড বন্ধ করে এই ফোনের লোকাল ডেটা নিয়ে চলবেন?')) return; localStorage.bb_local = '1'; localStorage.removeItem('bb_fb'); localStorage.removeItem('bb_profile'); location.reload(); }
 });
 
 /* ---------- router ---------- */
-const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, trash: vTrash, chat: vChat, team: vTeam };
-const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_full', staff: '#owner', logs: '#owner', trash: 'delete', team: 'orders_view' };
+const VIEWS = { home: vHome, orders: vOrders, courier: vCourier, sales: vSales, more: vMore, products: vProducts, combos: vCombos, purchases: vPurchases, suppliers: vSuppliers, expenses: vExpenses, damages: vDamages, cash: vCash, loans: vLoans, reports: vReports, staff: vStaff, logs: vLogs, trash: vTrash, routine: vRoutinePage, personal: vPersonal, chat: vChat, team: vTeam };
+const NEED = { chat: 'orders_view', orders: 'orders_view', courier: 'orders_view', sales: 'sales_view', products: 'products_view', combos: 'products_view', purchases: 'purchases_view', suppliers: 'purchases_view', expenses: 'expenses_view', damages: 'damages_view', cash: 'cash_view', loans: 'loans_view', reports: 'reports_full', staff: '#owner', logs: '#owner', routine: '#owner', personal: '#owner', trash: 'delete', team: 'orders_view' };
 const allowed = v => !NEED[v] || (NEED[v] === '#owner' ? isOwner() : can(NEED[v]));
 let lastView = '';
 function render() {
@@ -314,7 +337,7 @@ function render() {
   const fullStock = canR('products') && canR('purchases') && canR('sales') && canR('damages'), sb = (D.settings.main || {}).stockBase || null;
   R = calc(D, fullStock ? null : sb); R.unk = !fullStock && !sb;      // staff without purchase/sales/damage access use the owner's published stock numbers (no prices inside)
   if (isOwner()) stockPublish();
-  const locked = !!cloudCfg() && !profile, el = $('#main'), st = el.scrollTop;
+  const locked = !profile, el = $('#main'), st = el.scrollTop;
   let v = (location.hash || '#home').slice(1).split('?')[0]; if (!VIEWS[v] || !allowed(v)) v = 'home';
   $('#shopname').textContent = 'BiM Manager'; $('#gearbtn').innerHTML = ico('gear', 19); $('#gearbtn').style.display = locked ? 'none' : '';
   const nav = $('#nav'), fab = $('#fab');

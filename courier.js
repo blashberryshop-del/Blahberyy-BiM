@@ -85,8 +85,8 @@ Object.assign(A, {
       const ds = r.status, lbl = CST[ds] || ds, before = o.cstatus; let to = null;
       if (ds === 'delivered' && o.status === 'Shipped') to = 'Delivered';
       else if (ds === 'cancelled' && o.status === 'Shipped') to = 'Return Pending';
-      if (to) { done.push(`#${o.no} ${o.customer || ''}: ${STBN[o.status]} → <b>${STBN[to]}</b>`); o.status = to; o.cstatus = ds; changed++; save('orders', o, true, `Steadfast সিঙ্ক #${o.no} → ${to}`); return; }
-      if (before !== ds) { o.cstatus = ds; changed++; save('orders', o, true, `Steadfast স্ট্যাটাস #${o.no}: ${ds}`); }
+      if (to) { done.push(`#${o.no} ${o.customer || ''}: ${STBN[o.status]} → <b>${STBN[to]}</b>`); o.status = to; o.cstatus = ds; changed++; save('orders', o, true, `Steadfast সিঙ্ক #${o.no} → ${to}`, true); return; }
+      if (before !== ds) { o.cstatus = ds; changed++; save('orders', o, true, `Steadfast স্ট্যাটাস #${o.no}: ${ds}`, true); }
       if (['partial_delivered', 'exceptional', 'unknown', 'hold'].includes(ds) || (ds === 'delivered' && o.status !== 'Shipped') || (ds === 'cancelled' && o.status !== 'Shipped')) { attn.push(`#${o.no} ${o.customer || ''}: ${lbl}`); if (before !== ds) newAttn++; }
       else wait.push(o);
     });
