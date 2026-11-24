@@ -85,9 +85,9 @@ function vHome() {
 /* Orders page = orders still to be confirmed (Pending) + cancelled. "কনফার্ম" sends an order to the Courier page (Entry). */
 const NEXT = { Pending: ['Confirmed', 'কনফার্ম'], Confirmed: ['Shipped', 'শিপড'], Shipped: ['Delivered', 'ডেলিভারড'] };
 function orderRows() {
-  const q = (view.oq || '').toLowerCase().trim(), f = view.of || 'all', inr = inR(view.orange || 'all'), drill = !!(view.osrc || view.odist || view.oloc);
+  const q = (view.oq || '').toLowerCase().trim(), f = view.of || 'all', inr = inR(view.orange || 'all'), drill = !!(view.osrc || view.odist || view.oloc || view.owho);
   const every = !!q || drill;     // a search or a report drill-down looks at every order; otherwise this page only holds orders not yet sent to the Courier page
-  return R.onl.filter(({ o }) => (every || !cStage(o)) && (!drill || f === 'all' || o.status === f) && callMatch(o, ocNow()) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) &&
+  return R.onl.filter(({ o }) => (every || !cStage(o)) && (!drill || f === 'all' || o.status === f) && callMatch(o, ocNow()) && inr(o.date) && (!view.osrc || sKey(o) === view.osrc) && (!view.odist || dKey(o) === view.odist) && (!view.oloc || lKey(o) === view.oloc) && (!view.owho || (o.by || 'অজানা') === view.owho) &&
     (!q || [o.no, o.customer, o.phone, o.address, o.tracking, o.cid, o.trackCode, o.courier, o.source, o.area, o.note].join(' ').toLowerCase().includes(q))).sort((a, b) => (b.o.urgent ? 1 : 0) - (a.o.urgent ? 1 : 0) || ((ocNow() === 'sched' || ocNow() === 'later') ? String(a.o.callDate || '').localeCompare(String(b.o.callDate || '')) || n(a.o.no) - n(b.o.no) : n(b.o.no) - n(a.o.no)));
 }
 const fdBtn = o => o.phone ? `<button class="qb fd fd-${fraudLevel(o)}" aria-label="ফ্রড চেক" title="ফ্রড চেক" onclick="event.stopPropagation();A.fraud('${o.id}')">${ico('shield', 14)}</button>` : '';
@@ -125,14 +125,14 @@ function orderCard({ o, r }) {
 }
 function orderListHtml() {
   const L = orderRows(), tot = L.length, show = L.slice(0, view.omax || 60); view.visible = show.map(x => x.o.id);
-  const wide = (view.oq || '').trim() || view.osrc || view.odist || view.oloc;
+  const wide = (view.oq || '').trim() || view.osrc || view.odist || view.oloc || view.owho;
   return `<div class="muted" style="margin:2px 2px 8px">${tot} টা অর্ডার · মোট ${money(L.reduce((a, x) => a + x.r.total, 0))}</div>` +
     (wide ? `<div class="muted legend"><i class="lg lg-ord"></i>অর্ডার পেজে আছে <i class="lg lg-cur"></i>কুরিয়ার পেজে চলে গেছে</div>` : '') +
     (show.map(orderCard).join('') || emptyBox('box', 'কোনো অর্ডার নেই')) + (tot > show.length ? `<button class="btn ghost" style="width:100%" onclick="view.omax=(view.omax||60)+60;render()">আরও দেখুন</button>` : '');
 }
 function vOrders() {
-  const f = view.of || 'all', drill = !!(view.osrc || view.odist || view.oloc), base = R.onl.filter(x => !cStage(x.o));
-  const fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'এলাকা: ' + view.oloc], drill && f !== 'all' && ['of', 'স্ট্যাটাস: ' + (STBN[f] || f)], view.orange && view.orange !== 'all' && ['orange', RANGES.find(x => x[0] === view.orange)[1]]].filter(Boolean);
+  const f = view.of || 'all', drill = !!(view.osrc || view.odist || view.oloc || view.owho), base = R.onl.filter(x => !cStage(x.o));
+  const fl = [view.osrc && ['osrc', 'সোর্স: ' + view.osrc], view.odist && ['odist', 'জেলা: ' + view.odist], view.oloc && ['oloc', 'এলাকা: ' + view.oloc], view.owho && ['owho', 'যোগ করেছেন: ' + view.owho], drill && f !== 'all' && ['of', 'স্ট্যাটাস: ' + (STBN[f] || f)], view.orange && view.orange !== 'all' && ['orange', RANGES.find(x => x[0] === view.orange)[1]]].filter(Boolean);
   const sm = !!view.sel, cnt = sm ? Object.keys(view.sel).length : 0;
   const callChips = [['todo', '📞 কল বাকি'], ...Object.keys(CALLS).filter(k => k !== 'ok').map(k => [k, CALLS[k][0] + ' ' + CALLS[k][1]]), ['ct_call', '❌ কলে ক্যানসেল'], ['ct_courier', '↩ কুরিয়ার ক্যানসেল'], ['urgent', '🔥 জরুরি'], ['', 'সব']];
   return (sm ? `<div class="selbar"><b>${cnt} টা সিলেক্ট</b><button class="btn sm" onclick="A.selLabel()">${ico('printer', 14)} লেবেল</button>${can('orders_status') ? '<button class="btn sm ghost" onclick="A.selStatus()">স্ট্যাটাস</button>' : ''}<button class="btn sm ghost" onclick="A.selAll()">সব</button><button class="btn sm ghost" onclick="A.selMode()">বাতিল</button></div>` : '') +
@@ -238,7 +238,7 @@ function vLoans() {
 function vReports() {
   const r = view.rrange || 'month', P = view.rpt = report(R, inR(r), today()), T = P.total, tab = view.rtab || 'src';
   const pct = v => T.orders ? Math.round(v / T.orders * 100) : 0;
-  const list = tab === 'src' ? P.bySource : tab === 'dist' ? P.byDistrict : P.byLocality; view.rkeys = view.rkeys || {}; view.rkeys[tab] = list.map(b => b.key);
+  const list = tab === 'src' ? P.bySource : tab === 'dist' ? P.byDistrict : tab === 'who' ? P.byPerson : P.byLocality; view.rkeys = view.rkeys || {}; view.rkeys[tab] = list.map(b => b.key);
   const mxd = Math.max(1, ...P.days.map(d => d.c));
   const tile = (st, label, v, cls) => `<div class="kc tap ${cls}" onclick="A.repGo('','','${st}')"><span class="kic">${ico(st === 'Delivered' ? 'check' : st === 'Returned' ? 'swap' : st === 'Cancelled' ? 'x' : 'box', 17)}</span><small>${label}</small><b>${v.n} <span class="muted" style="font-size:12px">(${pct(v.n)}%)</span></b><small>${money(v.v)}</small></div>`;
   const grp = (f) => P.rows.filter(x => f(x.o.status)); const sum = a => ({ n: a.length, v: a.reduce((s, x) => s + x.r.total, 0) });
@@ -247,8 +247,16 @@ function vReports() {
     `<div class="panel"><div class="oh"><span class="muted">মোট অর্ডার</span><b style="font-size:22px">${T.orders}</b></div><div class="sr"><i style="width:${pct(del.n)}%;background:var(--ok)"></i><i style="width:${pct(ret.n)}%;background:var(--warn)"></i><i style="width:${pct(can_.n)}%;background:var(--err)"></i><i style="width:${pct(act.n)}%;background:var(--info)"></i></div><div class="os">ডেলিভারি সাকসেস রেট (ডেলিভারড ÷ ডেলিভারড+রিটার্ন+ক্যানসেল): <b>${T.success == null ? '—' : T.success + '%'}</b></div></div>` +
     `<div class="kg">${tile('Delivered', 'ডেলিভারড', del, 'pos')}${tile('Returned', 'রিটার্ন', ret, ret.n ? 'neg' : '')}${tile('Cancelled', 'ক্যানসেল', can_, can_.n ? 'neg' : '')}${tile('Pending', 'চলমান', act, '')}</div>` +
     `<h3>গত ১৪ দিনের অর্ডার</h3><div class="panel"><div class="bars">${P.days.map(d => `<div title="${d.k}: ${d.c}" style="height:${Math.max(3, Math.round(d.c / mxd * 66))}px"></div>`).join('')}</div></div>` +
-    `<h3>কোথা থেকে কয়টা অর্ডার</h3><div class="seg"><button class="${tab === 'src' ? 'on' : ''}" onclick="A.rtab('src')">সোর্স</button><button class="${tab === 'dist' ? 'on' : ''}" onclick="A.rtab('dist')">জেলা</button><button class="${tab === 'loc' ? 'on' : ''}" onclick="A.rtab('loc')">এলাকা</button></div>` +
-    `<div class="panel" style="overflow-x:auto;padding:6px 8px"><table class="lg"><tr><th>${tab === 'src' ? 'সোর্স' : tab === 'dist' ? 'জেলা' : 'এলাকা'}</th><th>অর্ডার</th><th>✓</th><th>↩</th><th>✕</th><th>সফল%</th><th>মূল্য</th></tr>${list.slice(0, 25).map((b, i) => `<tr class="tap" onclick="A.repGoI('${tab}',${i})"><td><b>${esc(b.key)}</b></td><td>${b.orders}</td><td class="gr">${b.delivered}</td><td class="warn">${b.returned}</td><td class="rd">${b.cancelled}</td><td>${b.success == null ? '—' : b.success + '%'}</td><td>${money(b.value)}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">এই সময়ে অর্ডার নেই</td></tr>`}</table></div>` +
+    (() => { const TD = report(R, inR('today'), today()), m = {}; TD.bySource.forEach(b => m[b.key] = b); const keys = [...SOURCES, ...TD.bySource.map(b => b.key).filter(k => !SOURCES.includes(k))]; return `<h3>আজকের অর্ডার — সোর্স অনুযায়ী <span class="muted" style="font-weight:400">(মোট ${TD.total.orders})</span></h3><div class="panel"><div class="srcT">${keys.map(k => { const b = m[k]; return `<div class="${b ? '' : 'z'}"><small>${esc(k)}</small><b>${b ? b.orders : 0}</b></div>`; }).join('')}</div></div>`; })() +
+    `<h3>কোথা থেকে কয়টা অর্ডার</h3><div class="seg"><button class="${tab === 'src' ? 'on' : ''}" onclick="A.rtab('src')">সোর্স</button><button class="${tab === 'dist' ? 'on' : ''}" onclick="A.rtab('dist')">জেলা</button><button class="${tab === 'loc' ? 'on' : ''}" onclick="A.rtab('loc')">এলাকা</button><button class="${tab === 'who' ? 'on' : ''}" onclick="A.rtab('who')">কে যোগ করেছে</button></div>` +
+    `<div class="panel" style="overflow-x:auto;padding:6px 8px"><table class="lg"><tr><th>${tab === 'src' ? 'সোর্স' : tab === 'dist' ? 'জেলা' : tab === 'who' ? 'নাম' : 'এলাকা'}</th><th>অর্ডার</th><th>✓</th><th>↩</th><th>✕</th><th>সফল%</th><th>মূল্য</th></tr>${list.slice(0, 60).map((b, i) => `<tr class="tap" onclick="A.repGoI('${tab}',${i})"><td><b>${esc(b.key)}</b></td><td>${b.orders}</td><td class="gr">${b.delivered}</td><td class="warn">${b.returned}</td><td class="rd">${b.cancelled}</td><td>${b.success == null ? '—' : b.success + '%'}</td><td>${money(b.value)}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">এই সময়ে অর্ডার নেই</td></tr>`}</table></div>` +
+    (tab === 'who' ? (() => {
+      const ppl = P.byPerson.map(b => b.key), srcs = [...SOURCES, ...P.bySource.map(b => b.key).filter(k => !SOURCES.includes(k))], cnt = (p, f) => R.onl.filter(({ o }) => (o.by || 'অজানা') === p && f(o)).length;
+      const inRng = inR(r), days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d.toLocaleDateString('en-CA'); });
+      const th = a => a.map(x => `<th>${x}</th>`).join('');
+      return `<h3>কে কোন সোর্সে কয়টা অর্ডার <span class="muted" style="font-weight:400">(উপরের সময় অনুযায়ী)</span></h3><div class="panel" style="padding:6px 8px;overflow-x:auto"><table class="lg"><tr><th>নাম</th>${th(srcs.map(esc))}<th>মোট</th></tr>${ppl.map(p => `<tr><td><b>${esc(p)}</b></td>${srcs.map(s => { const c = cnt(p, o => inRng(o.date) && sKey(o) === s); return `<td${c ? '' : ' class="muted"'}>${c}</td>`; }).join('')}<td><b>${cnt(p, o => inRng(o.date))}</b></td></tr>`).join('') || '<tr><td class="muted">এই সময়ে অর্ডার নেই</td></tr>'}</table></div>` +
+        `<h3>কে কোন দিন কয়টা অর্ডার <span class="muted" style="font-weight:400">(গত ৭ দিন)</span></h3><div class="panel" style="padding:6px 8px;overflow-x:auto"><table class="lg"><tr><th>নাম</th>${th(days.map(d => d === today() ? 'আজ' : d.slice(8) + '/' + d.slice(5, 7)))}</tr>${[...new Set([...ppl, ...R.onl.filter(({ o }) => days.includes(o.date)).map(({ o }) => o.by || 'অজানা')])].map(p => `<tr><td><b>${esc(p)}</b></td>${days.map(d => { const c = cnt(p, o => o.date === d); return `<td${c ? '' : ' class="muted"'}>${c}</td>`; }).join('')}</tr>`).join('')}</table></div>`;
+    })() : '') +
     `<p class="note">লাইনে ট্যাপ করলে ওই সোর্স/এলাকার অর্ডারগুলো দেখাবে। এলাকা ঠিকানা থেকে অটো ধরা হয়; ভুল হলে অর্ডারে "জেলা/এলাকা" ঘরে ঠিক করে দিন। ✓ ডেলিভারড · ↩ রিটার্ন · ✕ ক্যানসেল</p>`;
 }
 

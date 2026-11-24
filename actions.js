@@ -376,8 +376,8 @@ const A = {
   rep(r) { view.rrange = r; render(); },
   rtab(t) { view.rtab = t; render(); },
   repGo(kind, key, st) {
-    view.osrc = view.odist = view.oloc = null; view.oq = '';
-    if (kind === 'src') view.osrc = key; else if (kind === 'dist') view.odist = key; else if (kind === 'loc') view.oloc = key;
+    view.osrc = view.odist = view.oloc = view.owho = null; view.oq = '';
+    if (kind === 'src') view.osrc = key; else if (kind === 'dist') view.odist = key; else if (kind === 'loc') view.oloc = key; else if (kind === 'who') view.owho = key;
     if (kind) { view.of = st || 'all'; view.orange = view.rrange || 'month'; return A.nav('orders'); }       // report drill-down: all orders of that source/district
     view.of = 'all'; view.orange = view.rrange || 'month';
     if (st && STAGE_OF[st]) { view.cst = STAGE_OF[st]; view.cf = 'all'; return A.nav('courier'); }           // confirmed/shipped/delivered/returned live on the Courier page
@@ -385,7 +385,7 @@ const A = {
   },
   repCsv() {
     const P = view.rpt; if (!P) return; const rows = [['Group', 'Orders', 'Delivered', 'Returned', 'Cancelled', 'Active', 'Success %', 'Value', 'Delivered Value']];
-    [['SOURCE', P.bySource], ['DISTRICT', P.byDistrict], ['LOCALITY', P.byLocality]].forEach(([t, L]) => { rows.push([t]); L.forEach(b => rows.push([b.key, b.orders, b.delivered, b.returned, b.cancelled, b.active, b.success ?? '', Math.round(b.value), Math.round(b.dvalue)])); });
+    [['SOURCE', P.bySource], ['DISTRICT', P.byDistrict], ['LOCALITY', P.byLocality], ['ADDED BY', P.byPerson]].forEach(([t, L]) => { rows.push([t]); L.forEach(b => rows.push([b.key, b.orders, b.delivered, b.returned, b.cancelled, b.active, b.success ?? '', Math.round(b.value), Math.round(b.dvalue)])); });
     A.dl(`blashberry-report-${today()}.csv`, '﻿' + rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv');
   },
   dl(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); },

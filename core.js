@@ -316,7 +316,8 @@
       rows, total, days,
       bySource: bucket(rows, sKey),
       byDistrict: bucket(rows, dKey),
-      byLocality: bucket(rows, lKey)
+      byLocality: bucket(rows, lKey),
+      byPerson: bucket(rows, o => o.by || 'অজানা')
     };
   }
 
