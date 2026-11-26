@@ -60,7 +60,7 @@ Object.assign(A, {
     if (!confirm(`Steadfast-এ বুক করবেন?\n\n#${o.no} ${o.customer}\n${phone}\n${addr}\nCOD: ৳${cod.toLocaleString('en-IN')}\n\n⚠ এটা আসল পার্সেল তৈরি করবে। এখান থেকে বাতিল করা যায় না (Steadfast প্যানেল থেকে করতে হবে)।`)) return;
     A._busy = A._busy || {}; if (A._busy[id]) return; A._busy[id] = 1; toast('বুক হচ্ছে…');
     try {
-      const res = await API.call('/book', { invoice: 'BB' + o.no, name: o.customer, phone, address: addr, cod, note: o.note || '', items: (o.items || []).map(i => i.code + '×' + i.qty).join(', ') });
+      const p2 = String(o.phone2 || '').replace(/\D/g, '').replace(/^88(?=01)/, ''); const res = await API.call('/book', { invoice: 'BB' + o.no, name: o.customer, phone, phone2: /^01[3-9]\d{8}$/.test(p2) && p2 !== phone ? p2 : '', address: addr, cod, note: o.note || '', items: (o.items || []).map(i => i.code + '×' + i.qty).join(', ') });
       o.courier = (cfg().couriers.find(c => /steadfast/i.test(c))) || 'Steadfast'; o.tracking = res.consignment_id; o.cid = res.consignment_id; o.trackCode = res.tracking_code || ''; o.cstatus = res.status || 'in_review';
       if (o.status === 'Pending' || o.status === 'Confirmed') o.status = 'Shipped';
       save('orders', o, false, `Steadfast বুক #${o.no} CID ${res.consignment_id}`); closeSheet();

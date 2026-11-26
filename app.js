@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.3';
 /* BlashBerry — app core: state, storage, permissions, cloud sync, auth */
 const { ST, n, live, parseOrder, mapStatus, calc, agg, snap, ledger, normSource, matchSource, areaOf, mergeState, splitForSave, migrate, report, FIN_PAIR } = BB;
 const PM = BBPerms, COLLS = PM.COLLS;
@@ -84,7 +84,7 @@ function trackOrder(rec, act) {
   if (rec.webId && typeof wooSync === 'function') { const k = wooKey(rec); if (rec._wk === undefined ? k !== 'Pending' : rec._wk !== k) wooSync(rec, k); rec._wk = k; }
   rec._ls = rec.status || ''; rec._sn = ordSnap(rec);
 }
-function put(coll, rec) { if (coll === 'orders') { try { trackOrder(rec); } catch (e) { } } rec._u = Date.now(); S[coll][rec.id] = rec; persist(); push(coll, rec); }
+function put(coll, rec) { if (coll === 'orders') { try { if (!n(rec.charge) && ['Shipped', 'Delivered'].includes(rec.status) && can('costs_edit')) { const ac = BB.autoCharge(S, rec); if (ac != null && ac > 0) { rec.charge = ac; rec.chA = 1; } } trackOrder(rec); } catch (e) { } } rec._u = Date.now(); S[coll][rec.id] = rec; persist(); push(coll, rec); }
 function save(coll, rec, quiet, logText) {
   if (!rec.id) rec.id = uid();
   const parts = splitForSave(coll, rec), base = parts[0].coll;

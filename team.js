@@ -15,7 +15,7 @@ function tgCfg(ym) {                                                   // target
 }
 const modList = () => isOwner() ? Object.values(SY.staff || {}).filter(s => s.role !== 'owner' && s.active !== false).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
   : (() => { const m = {}; ((cfg() && cfg().roster) || []).forEach(r => { if (r && r.u && r.n && !r.o) m[r.u] = { id: r.u, name: r.n }; }); if (profile && profile.uid && profile.role !== 'owner') m[profile.uid] = { id: profile.uid, name: profile.name }; return Object.values(m).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))); })();
-const orderBy = (o, s) => o.byUid ? o.byUid === s.id : String(o.by || '').trim().toLowerCase() === String(s.name || '').trim().toLowerCase() && !!s.name;
+const orderBy = (o, s) => o.webId ? false : o.byUid ? o.byUid === s.id : String(o.by || '').trim().toLowerCase() === String(s.name || '').trim().toLowerCase() && !!s.name;
 
 function modStats(s, ym) {
   const t = { added: 0, delivered: 0, cancelled: 0, returned: 0, going: 0, days: {} };

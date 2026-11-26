@@ -40,7 +40,7 @@ function webCreate(w) {
   const items = [], miss = [];
   (w.items || []).forEach(i => { const c = webMatch(i); if (c) { const ex = items.find(x => x.code === c); const price = +i.price || n(R.sellPrice(c)); if (ex) ex.qty += i.qty; else items.push({ code: c, qty: i.qty, price }); } else miss.push((i.name || i.sku) + '×' + i.qty); });
   const note = [w.note, miss.length ? '⚠ প্রোডাক্ট মেলেনি: ' + miss.join(', ') : '', w.pay && !/cash|cod|ক্যাশ/i.test(w.pay) ? '⚠ ওয়েবসাইটের পেমেন্ট: ' + w.pay + ' — আগে টাকা পেলে পেমেন্ট ও অগ্রিম ঠিক করুন' : ''].filter(Boolean).join(' | ');
-  const o = { id: uid(), no: nextNo(), date: today(), status: 'Pending', pay: 'Cash on Delivery', customer: w.name || '', phone: w.phone || '', address: w.address || '', source: 'Website', webId: w.id, items, note, by: (profile && profile.name) || '', byUid: (profile && profile.uid) || '', byAt: Date.now() };
+  const o = { id: uid(), no: nextNo(), date: today(), status: 'Pending', pay: 'Cash on Delivery', customer: w.name || '', phone: w.phone || '', address: w.address || '', source: 'Website', webId: w.id, items, note, by: 'Website', byUid: '', byAt: Date.now() };
   if (w.delivery) o.delivery = w.delivery;
   if (!items.length && w.total) o.bill = w.total;
   save('orders', o, true, `ওয়েব অর্ডার #${o.no}`); return o;

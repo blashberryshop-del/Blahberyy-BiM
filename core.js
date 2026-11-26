@@ -320,6 +320,27 @@
     });
     return Object.values(m).map(b => { const fin = b.delivered + b.returned + b.cancelled; b.success = fin ? Math.round(b.delivered / fin * 100) : null; return b; }).sort((a, b) => b.orders - a.orders);
   }
+
+  /* ---------- courier delivery charge auto-calculation (rates are typed once in Settings → কুরিয়ার রেট) ---------- */
+  const RATE_DEF = { in1: 75, inh: 65, inx: 20, inx5: 25, sub1: 105, subh: 105, subx: 20, subx5: 16, out1: 135, outh: 115, outx: 20, outx5: 16,
+    subList: 'গাজীপুর, Gazipur, নারায়ণগঞ্জ, Narayanganj, সাভার, Savar, কেরানীগঞ্জ, Keraniganj, টঙ্গী, Tongi, আশুলিয়া, Ashulia' };   // Steadfast standard rates (home delivery); change in Settings
+  const rateCfg = S => { const r = ((S.settings || {}).main || {}).rates || {}, o = Object.assign({}, RATE_DEF); Object.keys(r).forEach(k => { if (r[k] !== undefined && r[k] !== '' && r[k] !== null) o[k] = r[k]; }); return o; };
+  function zoneOf(S, o) {
+    const r = rateCfg(S), txt = bn2en((o.address || '') + ' ' + (o.area || '')).toLowerCase();
+    const subs = String(r.subList || '').split(/[,،]/).map(s => bn2en(s).trim().toLowerCase()).filter(Boolean);
+    if (subs.some(s => txt.includes(s))) return 'sub';
+    const d = String(areaOf(o.area || o.address || '').district || areaOf(o.address || '').district || '').toLowerCase();
+    return d ? (d === 'dhaka' ? 'in' : 'out') : '';
+  }
+  function autoCharge(S, o) {
+    const r = rateCfg(S), z = zoneOf(S, o); if (!z) return null;
+    const w = n(o.kg) || 1, f = r[z + '1'], h = r[z + 'h'];
+    if (f === undefined || f === '' || isNaN(f)) return null;
+    if (w <= 0.5 && h !== undefined && h !== '' && !isNaN(h)) return n(h);
+    const kg = Math.max(1, Math.ceil(w)), x = n(r[z + 'x']), x5 = (r[z + 'x5'] === undefined || r[z + 'x5'] === '') ? x : n(r[z + 'x5']);
+    return n(f) + (Math.min(kg, 5) - 1) * x + Math.max(kg - 5, 0) * x5;
+  }
+  const whoOf = o => o.webId ? 'ওয়েবসাইট (অটো)' : (o.by || 'অজানা');
   const sKey = o => normSource(o.source) || 'অজানা';
   const dKey = o => (o.area ? (areaOf(o.area).district || titleCase(String(o.area).trim())) : areaOf(o.address).district) || 'অজানা';
   const lKey = o => thanaOf(o.address) || 'থানা উল্লেখ নেই';
@@ -333,10 +354,10 @@
       bySource: bucket(rows, sKey),
       byDistrict: bucket(rows, dKey),
       byLocality: bucket(rows, lKey),
-      byPerson: bucket(rows, o => o.by || 'অজানা')
+      byPerson: bucket(rows, o => whoOf(o))
     };
   }
 
-  g.BB = { thanaOf, codCfg, ST, OUT, REV, TRANSIT, n, live, bn2en, parseOrder, mapStatus, calc, agg, ledger, snap, SRC, matchSource, normSource, areaOf, DIST, mergeState, splitForSave, FIN_PAIR, migrate, report, OUTCOME, sKey, dKey, lKey };
+  g.BB = { rateOf: (S, k) => rateCfg(S)[k], whoOf, zoneOf, autoCharge, thanaOf, codCfg, ST, OUT, REV, TRANSIT, n, live, bn2en, parseOrder, mapStatus, calc, agg, ledger, snap, SRC, matchSource, normSource, areaOf, DIST, mergeState, splitForSave, FIN_PAIR, migrate, report, OUTCOME, sKey, dKey, lKey };
   if (typeof module !== 'undefined') module.exports = g.BB;
 })(typeof window !== 'undefined' ? window : globalThis);
