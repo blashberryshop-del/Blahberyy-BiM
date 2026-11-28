@@ -13,11 +13,14 @@ function vRoutine() {
   if (!isOwner()) return '';
   const L = rtItems(), d = today(), dn = rtDay(d).done || {};
   if (!L.length) return `<div class="panel"><div class="oh"><b class="ph">✅ আজকের রুটিন (Today To-Do)</b><button class="btn sm" onclick="A.nav('routine')">সেটআপ</button></div><div class="tkE">দৈনিক রুটিন (নামাজ, খাওয়া, ওষুধ, ব্যবসার রিপোর্ট দেখা…) একবার সেট করুন — প্রতিদিন নতুন করে টিক দেবেন।</div></div>`;
-  const done = L.filter(i => dn[i.id]).length, p = rtPct(done, L.length);
+  const done = L.filter(i => dn[i.id]).length, p = rtPct(done, L.length), left = L.filter(i => !dn[i.id]), open = rtOpen();
   const grp = RT_G.map(g => [g, L.filter(i => (i.g || 'যেকোনো সময়') === g)]).filter(x => x[1].length);
-  return `<div class="panel" id="rtp"><div class="oh"><b class="ph">✅ আজকের রুটিন <span class="tkcnt">${done}/${L.length}</span></b><a class="lnk" onclick="A.nav('routine')">এডিট / রিপোর্ট</a></div><div class="rtbar"><i style="width:${p}%"></i></div>` +
+  const head1 = `<div class="oh" onclick="A.rtTog()" style="cursor:pointer"><b class="ph">✅ আজকের রুটিন <span class="tkcnt">${done}/${L.length}</span></b><span class="lnk">${open ? 'ছোট করুন ▴' : (left.length ? 'খুলুন ▾' : '🎉 সব শেষ ▾')}</span></div><div class="rtbar"><i style="width:${p}%"></i></div>`;
+  if (!open) return `<div class="panel" id="rtp" style="padding-bottom:10px">${head1}${left.length ? `<div class="rtnx">পরের: ${left.slice(0, 2).map(i => `<label class="rti"><input type="checkbox" onchange="A.rtick('${i.id}')"><span>${esc(i.t)}</span>${i.tm ? `<small>${esc(i.tm)}</small>` : ''}</label>`).join('')}${left.length > 2 ? `<small class="muted">আরও ${left.length - 2}টা বাকি</small>` : ''}</div>` : ''}</div>`;
+  return `<div class="panel" id="rtp">${head1}<div style="text-align:right;margin:-2px 0 4px"><a class="lnk" onclick="A.nav('routine')">এডিট / রিপোর্ট</a></div>` +
     grp.map(([g, a]) => `<div class="rtg">${g}</div>` + a.map(i => `<label class="rti${dn[i.id] ? ' on' : ''}"><input type="checkbox" ${dn[i.id] ? 'checked' : ''} onchange="A.rtick('${i.id}')"><span>${esc(i.t)}</span>${i.tm ? `<small>${esc(i.tm)}</small>` : ''}</label>`).join('')).join('') + `</div>`;
 }
+const rtOpen = () => { try { return localStorage.getItem('bb_rt_open') === '1'; } catch (e) { return false; } };
 
 /* ---------- routine page: setup + month report ---------- */
 function vRoutinePage() {
@@ -37,6 +40,7 @@ function vRoutinePage() {
       stat.sort((a, b) => a.p - b.p).map(s => `<div class="panel rtr"><div class="oh"><b>${esc(s.i.t)}${s.i.x ? ' <small class="muted">(বাদ দেওয়া)</small>' : ''}</b><span class="${s.p < 60 ? 'rd' : s.p < 85 ? 'warn' : 'gr'}"><b>${s.dn}/${s.el.length} · ${s.p}%</b></span></div><div class="rtbar"><i class="${s.p < 60 ? 'bad' : ''}" style="width:${s.p}%"></i></div><div class="rtdots">${days.map((d, k) => { const inEl = s.el.includes(d), ok = (rtDay(d).done || {})[s.i.id]; return `<i class="${!inEl ? 'f' : ok ? 'y' : 'n'}" title="${d}"></i>`; }).join('')}</div></div>`).join('') + '<p class="note">🟩 করেছেন · 🟥 ছুটে গেছে · ⬜ আসেনি/তখন ছিল না</p>' : '<div class="tkE">এই মাসের জন্য রিপোর্টে কিছু নেই।</div>');
 }
 Object.assign(A, {
+  rtTog() { try { localStorage.setItem('bb_rt_open', rtOpen() ? '0' : '1'); } catch (e) { } render(); },
   rtick(id) { const d = today(), r = JSON.parse(JSON.stringify(rtDay(d))); r.done = r.done || {}; if (r.done[id]) delete r.done[id]; else r.done[id] = Date.now(); S.rdays = S.rdays || {}; put('rdays', r); render(); },
   rtMon(k) { const t = view.rm || today().slice(0, 7); const x = new Date(+t.slice(0, 4), +t.slice(5) - 1 + k, 1); view.rm = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); render(); },
   rtPreset() { const c = JSON.parse(JSON.stringify(rtCfg())); c.items = c.items || []; RT_PRESET.forEach(([t, g]) => c.items.push({ id: uid(), t, g, c: today() })); rtSaveCfg(c); render(); },
@@ -53,9 +57,11 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && to
 
 /* ---------- personal account ---------- */
 const PCAT = ['খাবার ও বাজার', 'বাসা ভাড়া', 'বিল (গ্যাস/বিদ্যুৎ/নেট)', 'যাতায়াত', 'চিকিৎসা ও ওষুধ', 'কেনাকাটা', 'পরিবার', 'দান/যাকাত', 'শিক্ষা', 'বিনোদন', 'অন্যান্য'];
+/* personal wallet rows = own entries + business-cash entries marked "ব্যক্তিগত ওয়ালেট" (cash OUT -> wallet +, cash IN -> wallet −) */
+const pRows = () => live(S, 'pacct').concat(live(S, 'cash').filter(c => c.toP).map(c => ({ id: c.id, _c: 1, date: c.date, type: c.type === 'out' ? 'in' : 'out', cat: 'ব্যবসার ক্যাশ', note: c.type === 'out' ? 'ব্যবসার ক্যাশ থেকে নিলাম' + (c.desc ? ' · ' + c.desc : '') : 'ব্যবসায় দিলাম' + (c.desc ? ' · ' + c.desc : ''), amount: c.amount, ts: c.ts, byN: c.byN, ed: c.ed, edN: c.edN })));
 function vPersonal() {
   if (!isOwner()) return '';
-  const t = today(), ym = view.pm || t.slice(0, 7), [Y, M] = ym.split('-').map(Number), all = live(S, 'pacct'), cur = all.filter(r => (r.date || '').slice(0, 7) === ym);
+  const t = today(), ym = view.pm || t.slice(0, 7), [Y, M] = ym.split('-').map(Number), all = pRows(), cur = all.filter(r => (r.date || '').slice(0, 7) === ym);
   const sum = (a, ty) => a.filter(r => r.type === ty).reduce((s, r) => s + n(r.amount), 0), inn = sum(cur, 'in'), out = sum(cur, 'out'), bal = sum(all, 'in') - sum(all, 'out');
   const MNm = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const cats = {}; cur.filter(r => r.type === 'out').forEach(r => { const k = r.cat || 'অন্যান্য'; cats[k] = (cats[k] || 0) + n(r.amount); });
@@ -63,11 +69,11 @@ function vPersonal() {
   const six = [...Array(6)].map((_, i) => { const x = new Date(Y, M - 1 - (5 - i), 1), k = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'), a = all.filter(r => (r.date || '').slice(0, 7) === k); return { k, in: sum(a, 'in'), out: sum(a, 'out') }; });
   const L = cur.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b._u || 0) - (a._u || 0));
   return head('ব্যক্তিগত হিসাব', `<button class="btn sm" onclick="A.simple('pacct')">${ico('plus', 14)} নতুন</button>`) +
-    `<p class="note">🔒 শুধু আপনি দেখতে পান। এই হিসাব ব্যবসার বিক্রি, প্রফিট, ক্যাশ বা খরচের সাথে <b>কোনোভাবেই মেলানো হয় না</b> — সম্পূর্ণ আলাদা।</p>` +
+    `<p class="note">🔒 শুধু আপনি দেখতে পান। ব্যবসার বিক্রি, প্রফিট বা খরচের সাথে মেশে না। শুধু একটাই যোগাযোগ: ক্যাশ বুকে এন্ট্রির সময় "👤 ব্যক্তিগত ওয়ালেট"-এ হ্যাঁ দিলে ওই টাকা এখানে জমা/খরচ হয়ে আসে।</p>` +
     `<div class="kg">${kc('wallet', 'বর্তমান ব্যালেন্স (মোট)', money(bal), bal < 0 ? 'neg' : 'pos')}${kc('swap', MNm[M - 1] + ': নেট', money(inn - out), inn - out < 0 ? 'neg' : 'pos')}${kc('down', 'এ মাসে জমা', money(inn), 'pos')}${kc('receipt', 'এ মাসে খরচ', money(out), out ? 'neg' : '')}</div>` +
     `<div class="oh" style="margin:6px 0 8px"><button class="btn ghost sm" onclick="A.pMon(-1)">‹</button><b>${MNm[M - 1]} ${Y}</b><button class="btn ghost sm" onclick="A.pMon(1)" ${ym >= t.slice(0, 7) ? 'disabled' : ''}>›</button></div>` +
     `<h3>কোন খাতে কত খরচ</h3><div class="panel">${cl.map(([k, v]) => `<div class="pcb"><div class="oh"><span>${esc(k)}</span><b>${money(v)} <small class="muted">(${rtPct(v, out)}%)</small></b></div><div class="rtbar"><i style="width:${Math.round(v / mxc * 100)}%"></i></div></div>`).join('') || '<div class="tkE">এই মাসে কোনো খরচ নেই</div>'}</div>` +
     `<h3>গত ৬ মাস</h3><div class="panel" style="overflow-x:auto;padding:6px 8px"><table class="lg"><tr><th>মাস</th><th>জমা</th><th>খরচ</th><th>নেট</th></tr>${six.map(m => `<tr><td>${MNm[+m.k.slice(5) - 1]}</td><td class="gr">${money(m.in)}</td><td class="rd">${money(m.out)}</td><td><b>${money(m.in - m.out)}</b></td></tr>`).join('')}</table></div>` +
-    `<h3>এন্ট্রি (${L.length})</h3>` + (L.map(r => `<div class="oc" onclick="A.simple('pacct','${r.id}')"><div class="oh"><b>${esc(r.type === 'in' ? 'জমা' : (r.cat || 'খরচ'))}${r.note ? ' · ' + esc(r.note) : ''}</b><span class="${r.type === 'out' ? 'rd' : 'gr'}">${r.type === 'out' ? '−' : '+'}${money(r.amount)}</span></div><div class="os">${fmtD(r.date)}</div></div>`).join('') || emptyBox('list', 'এই মাসে কিছু নেই'));
+    `<h3>এন্ট্রি (${L.length})</h3>` + (L.map(r => `<div class="oc" onclick="A.simple('${r._c ? 'cash' : 'pacct'}','${r.id}')"><div class="oh"><b>${esc(r.type === 'in' ? 'জমা' : (r.cat || 'খরচ'))}${r.note ? ' · ' + esc(r.note) : ''}</b><span class="${r.type === 'out' ? 'rd' : 'gr'}">${r.type === 'out' ? '−' : '+'}${money(r.amount)}</span></div><div class="os">${fmtD(r.date)}${typeof tmLine === 'function' ? tmLine(r) : ''}</div></div>`).join('') || emptyBox('list', 'এই মাসে কিছু নেই'));
 }
 A.pMon = k => { const t = view.pm || today().slice(0, 7); const x = new Date(+t.slice(0, 4), +t.slice(5) - 1 + k, 1); view.pm = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); render(); };

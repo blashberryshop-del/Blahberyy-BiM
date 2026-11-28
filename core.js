@@ -153,10 +153,12 @@
       const codDel = o.pay === 'Cash on Delivery' && o.status === 'Delivered' ? total - n(o.advance) : 0;
       const cc = codCfg(S, o.courier), charge = n(o.charge);
       const codBase = o.pay === 'Cash on Delivery' && o.status === 'Delivered' ? Math.max(total - n(o.advance) - (cc.base === 'net' ? charge : 0), 0) : 0;
-      const courierCharge = !items.length || ['Pending', 'Confirmed', 'Cancelled'].includes(o.status) ? 0 : charge;      // courier's own delivery charge (parcel actually went out)
+      const retLike = o.status === 'Returned' || o.status === 'Return Pending' || (o.status === 'Cancelled' && (o.cancelType === 'courier' || (!o.cancelType && o.tracking)));
+      const retCh = items.length && o.courier && retLike ? charge : 0;                                                     // charge the courier deducts for a returned / courier-cancelled parcel
+      const courierCharge = !items.length ? 0 : o.status === 'Delivered' ? charge : (o.status === 'Returned' || o.status === 'Cancelled') ? retCh : 0;      // courier's own delivery charge (parcel actually went out)
       const retInc = items.length && (o.status === 'Return Pending' || o.status === 'Returned') ? n(o.retCharge) : 0;       // customer paid delivery charge on return
       if (TRANSIT(o.status)) items.forEach(i => { const cb = combos[i.code]; if (cb) boxTr += Math.max(n(i.qty) - n(i.ret), 0) * n(cb.box); });
-      O[o.id] = { total, paid, due: closed ? 0 : total - paid, cod, codDel, rev, delivery, cost: 0, profit: 0, noItems: !items.length, codFee: items.length ? codBase * cc.pct / 100 : 0, courierCharge, retInc };
+      O[o.id] = { total, paid, due: closed ? 0 : total - paid, cod, codDel, rev, delivery, cost: 0, profit: 0, noItems: !items.length, codFee: items.length ? codBase * cc.pct / 100 : 0, courierCharge, retCh, retInc };
       onl.push({ o, r: O[o.id] });
     });
     live(S, 'sales').forEach(s => {
@@ -234,25 +236,76 @@
     return { rows, bills: sorted, balance: totalBill - totalPaid, totalBill, totalPaid };
   }
 
+  /* ---------- which delivered / returned courier orders have been paid for? ---------- */
+  // explicit: payments saved with the order list (courierPayments.ords). Older payments carry no list, so their total is
+  // assumed to have paid the oldest orders first (FIFO). Cached on R, which is rebuilt on every data change.
+  function payMap(R) {
+    if (R._pm) return R._pm;
+    const S = R.S, pm = { st: {} }, pays = live(S, 'courierPayments'), explicit = new Set(), pool = {}, per = {};
+    pays.forEach(p => (p.ords || []).forEach(id => explicit.add(id)));
+    pays.forEach(p => { if (p.courier && !(p.ords || []).length) pool[p.courier] = (pool[p.courier] || 0) + n(p.amount) + n(p.fee) + (p.v2 ? n(p.deduct) : 0); });
+    R.onl.forEach(({ o, r }) => {
+      if (!o.courier) return;
+      const del = o.status === 'Delivered';
+      if (!del && !(r.retCh > 0)) return;
+      (per[o.courier] = per[o.courier] || []).push({ o, v: del ? r.codDel - n(o.charge) - r.codFee : -r.retCh + r.retInc });
+    });
+    Object.keys(per).forEach(c => {
+      const L = per[c].sort((a, b) => String(a.o.date || '').localeCompare(String(b.o.date || '')) || n(a.o.no) - n(b.o.no));
+      const p = pool[c] || 0; let run = 0, stop = !(p > 0);
+      // one payout usually settles delivered + returned parcels together; per-parcel COD fees are unrounded here, so allow a few taka of difference before calling the last parcel unpaid
+      const rest = L.filter(x => !explicit.has(x.o.id)), tot = rest.reduce((a, x) => a + x.v, 0), whole = p > 0 && tot > 0 && p >= tot - Math.max(10, tot * 0.01);
+      L.forEach(x => {
+        if (whole && !explicit.has(x.o.id)) { pm.st[x.o.id] = 'paid'; return; }
+        if (explicit.has(x.o.id)) { pm.st[x.o.id] = 'paid'; return; }
+        if (!stop) { run += x.v; if (run <= p + 1) { pm.st[x.o.id] = 'paid'; return; } stop = true; }
+        pm.st[x.o.id] = 'due';
+      });
+    });
+    return R._pm = pm;
+  }
+  const kgOf = (R, items) => { let kg = 0, miss = 0; (items || []).forEach(i => { if (!i.code) return; const ex = R.expand(i.code, n(i.qty)); ex.forEach(([c, q]) => { const k = R.prod[c] ? n(R.prod[c].p.kg) : 0; if (!k) miss++; kg += k * q; }); }); return { kg: Math.round(kg * 1000) / 1000, miss }; };
+
   /* ---------- snapshot numbers (not period based) ---------- */
   function snap(R) {
     const S = R.S, P = Object.values(R.prod);
     const stockValue = P.reduce((a, x) => a + x.value, 0);
     const courierValue = P.reduce((a, x) => a + x.trValue, 0) + n(R.boxTr);
     const couriers = {};
-    const cs = name => couriers[name] || (couriers[name] = { name, sent: 0, transit: 0, delivered: 0, returned: 0, codDel: 0, recv: 0, charge: 0, dCharge: 0, codFee: 0, retRec: 0, fees: 0 });
+    const cs = name => couriers[name] || (couriers[name] = { name, sent: 0, transit: 0, delivered: 0, returned: 0, codDel: 0, recv: 0, charge: 0, dCharge: 0, retCh: 0, codFee: 0, retRec: 0, fees: 0, zones: { in: { col: 0, chg: 0 }, out: { col: 0, chg: 0 } } });
+    const zk = o => zoneOf(S, o) === 'in' ? 'in' : 'out';             // Steadfast has only two COD-charge zones: inside / outside Dhaka
     R.onl.forEach(({ o, r }) => {
       if (!o.courier) return;
-      if (!['Pending', 'Confirmed', 'Cancelled'].includes(o.status)) {
-        const c = cs(o.courier); c.sent++; c.charge += n(o.charge);
+      if (!['Pending', 'Confirmed', 'Cancelled'].includes(o.status) || r.retCh > 0) {
+        const c = cs(o.courier); if (!['Pending', 'Confirmed', 'Cancelled'].includes(o.status)) { c.sent++; c.charge += n(o.charge); }
         if (o.status === 'Shipped') c.transit++;
-        if (o.status === 'Delivered') { c.delivered++; c.codDel += r.codDel; c.dCharge += n(o.charge); c.codFee += r.codFee; }
+        if (o.status === 'Delivered') { c.delivered++; c.codDel += r.codDel; c.dCharge += n(o.charge); c.codFee += r.codFee; const z = c.zones[zk(o)]; z.col += r.codDel; z.chg += n(o.charge); }
+        if (r.retCh > 0) { c.retCh += r.retCh; c.zones[zk(o)].chg += r.retCh; }
         c.retRec += r.retInc;
         if (o.status === 'Return Pending' || o.status === 'Returned') c.returned++;
       }
     });
-    live(S, 'courierPayments').forEach(p => { if (p.courier) { const c = cs(p.courier); c.recv += n(p.amount) + n(p.deduct) + n(p.fee); c.fees += n(p.fee); c.cash = (c.cash || 0) + n(p.amount); } });
-    Object.values(couriers).forEach(c => { c.settle = c.codDel - c.dCharge - c.codFee + c.retRec; c.codDue = c.settle - c.recv; });
+    const pm = payMap(R);
+    live(S, 'courierPayments').forEach(p => { if (p.courier) { const c = cs(p.courier); c.recv += n(p.amount) + n(p.fee) + (p.v2 ? n(p.deduct) : 0); c.fees += n(p.fee); c.cash = (c.cash || 0) + n(p.amount); } });
+    // COD charge: Steadfast charges each zone on (cash collected - that zone's delivery charges incl. returned parcels), rounded to the taka; no charge if the zone's delivery charges exceed what it collected
+    const zFee = (cc, z) => z.col > z.chg ? Math.round((z.col - z.chg) * cc.pct / 100) : 0;
+    Object.values(couriers).forEach(c => {
+      const cc = codCfg(S, c.name);
+      if (cc.base === 'net') c.codFee = zFee(cc, c.zones.in) + zFee(cc, c.zones.out);
+      c.settle = c.codDel - c.dCharge - c.retCh - c.codFee + c.retRec; c.codDue = c.settle - c.recv;
+      // parcels whose money has not been received yet (Steadfast "Available balance" check)
+      const u = { n: 0, ret: 0, in: { col: 0, chg: 0 }, out: { col: 0, chg: 0 }, perFee: 0, retRec: 0 };
+      R.onl.forEach(({ o, r }) => {
+        if (o.courier !== c.name || pm.st[o.id] !== 'due') return;
+        const z = u[zk(o)];
+        if (o.status === 'Delivered') { u.n++; z.col += r.codDel; z.chg += n(o.charge); u.perFee += r.codFee; }
+        else if (r.retCh > 0) { u.ret++; z.chg += r.retCh; }
+        u.retRec += r.retInc;
+      });
+      u.fee = cc.base === 'net' ? zFee(cc, u.in) + zFee(cc, u.out) : u.perFee;
+      u.col = u.in.col + u.out.col; u.chg = u.in.chg + u.out.chg; u.net = u.col - u.chg - u.fee + u.retRec;
+      c.unpaid = u;
+    });
     const codDue = Object.values(couriers).reduce((a, c) => a + c.codDue, 0);
     const customerDue = R.off.reduce((a, x) => a + x.r.due, 0);
     const supplierPayable = live(S, 'suppliers').reduce((a, s) => a + ledger(S, s.id).balance, 0)
@@ -262,8 +315,9 @@
     const taken = live(S, 'loansTaken').map(l => ({ l, paid: live(S, 'loanPayments').filter(c => c.loanId === l.id).reduce((a, c) => a + n(c.amount), 0) }));
     const takenOut = taken.reduce((a, x) => a + Math.max(n(x.l.amount) + n(x.l.extra) - x.paid, 0), 0);
     const cfg = (S.settings || {}).main || {};
-    const cash = n(cfg.openCash) + live(S, 'cash').reduce((a, c) => a + (c.type === 'out' ? -n(c.amount) : n(c.amount)), 0);
-    return { stockValue, courierValue, couriers, codDue, customerDue, supplierPayable, givenOut, takenOut, given, taken, cash };
+    const expCut = live(S, 'expenses').filter(e => e.cut).reduce((a, e) => a + n(e.amount), 0);          // expenses the person chose to take out of the business cash
+    const cash = n(cfg.openCash) + live(S, 'cash').reduce((a, c) => a + (c.type === 'out' ? -n(c.amount) : n(c.amount)), 0) - expCut;
+    return { expCut, stockValue, courierValue, couriers, codDue, customerDue, supplierPayable, givenOut, takenOut, given, taken, cash };
   }
 
 
@@ -358,6 +412,6 @@
     };
   }
 
-  g.BB = { rateOf: (S, k) => rateCfg(S)[k], whoOf, zoneOf, autoCharge, thanaOf, codCfg, ST, OUT, REV, TRANSIT, n, live, bn2en, parseOrder, mapStatus, calc, agg, ledger, snap, SRC, matchSource, normSource, areaOf, DIST, mergeState, splitForSave, FIN_PAIR, migrate, report, OUTCOME, sKey, dKey, lKey };
+  g.BB = { payMap, kgOf, rateOf: (S, k) => rateCfg(S)[k], whoOf, zoneOf, autoCharge, thanaOf, codCfg, ST, OUT, REV, TRANSIT, n, live, bn2en, parseOrder, mapStatus, calc, agg, ledger, snap, SRC, matchSource, normSource, areaOf, DIST, mergeState, splitForSave, FIN_PAIR, migrate, report, OUTCOME, sKey, dKey, lKey };
   if (typeof module !== 'undefined') module.exports = g.BB;
 })(typeof window !== 'undefined' ? window : globalThis);
